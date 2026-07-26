@@ -1,5 +1,5 @@
 import { createContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { getKeycloak, initKeycloak, isKeycloakConfigured } from './keycloak'
+import { getKeycloak, initKeycloak, isAuthBypassed, isKeycloakConfigured } from './keycloak'
 import type { AuthContextValue } from './types'
 
 export const AuthContext = createContext<AuthContextValue | null>(null)
@@ -10,13 +10,14 @@ type AuthProviderProps = {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const isConfigured = isKeycloakConfigured()
-  const [isReady, setIsReady] = useState(!isConfigured)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const isBypassed = isAuthBypassed()
+  const [isReady, setIsReady] = useState(isBypassed || !isConfigured)
+  const [isAuthenticated, setIsAuthenticated] = useState(isBypassed)
   const [token, setToken] = useState<string | undefined>()
-  const [username, setUsername] = useState<string | undefined>()
+  const [username, setUsername] = useState<string | undefined>(isBypassed ? '本機開發者' : undefined)
 
   useEffect(() => {
-    if (!isConfigured) {
+    if (isBypassed || !isConfigured) {
       return
     }
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return {
       isConfigured,
+      isBypassed,
       isReady,
       isAuthenticated,
       token,
@@ -85,7 +87,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       },
       hasRealmRole: (role: string) => keycloak?.hasRealmRole(role) ?? false,
     }
-  }, [isConfigured, isReady, isAuthenticated, token, username])
+  }, [isConfigured, isBypassed, isReady, isAuthenticated, token, username])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

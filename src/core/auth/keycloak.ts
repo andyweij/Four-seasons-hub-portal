@@ -10,6 +10,11 @@ export function isKeycloakConfigured(): boolean {
   return Boolean(keycloakConfig.url && keycloakConfig.realm && keycloakConfig.clientId)
 }
 
+/** 僅供本機開發暫時略過 Keycloak；production build 一律不允許略過。 */
+export function isAuthBypassed(): boolean {
+  return import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true'
+}
+
 let keycloakInstance: Keycloak | null = null
 let initPromise: Promise<boolean> | null = null
 

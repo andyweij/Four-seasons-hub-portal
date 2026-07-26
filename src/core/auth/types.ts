@@ -1,5 +1,6 @@
 export type AuthContextValue = {
   isConfigured: boolean
+  isBypassed: boolean
   isReady: boolean
   isAuthenticated: boolean
   token: string | undefined
