@@ -1,3 +1,4 @@
 export * from './config'
 export * from './client'
-export * from './endpoints'
+export * from './modules'
+export * from '../../types'

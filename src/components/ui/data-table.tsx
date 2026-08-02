@@ -58,20 +58,20 @@ const columns: ColumnDef<ModelRecord>[] = [
       </div>
     ),
   },
-  {
-    accessorKey: "modelPath",
-    header: "部署路徑 / 標識",
-    cell: ({ row }) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-teal-400">{row.getValue("modelPath")}</code>,
-  },
+  // {
+  //   accessorKey: "modelPath",
+  //   header: "部署路徑 / 標識",
+  //   cell: ({ row }) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-teal-400">{row.getValue("modelPath")}</code>,
+  // },
   {
     accessorKey: "maxTokens",
     header: "Context 限制",
     cell: ({ row }) => <span>{row.getValue("maxTokens")} tokens</span>,
   },
-  {
-    accessorKey: "version",
-    header: "版本",
-  },
+  // {
+  //   accessorKey: "version",
+  //   header: "版本",
+  // },
   {
     accessorKey: "status",
     header: "健康狀態",
@@ -90,10 +90,10 @@ const columns: ColumnDef<ModelRecord>[] = [
       )
     },
   },
-  {
-    accessorKey: "updatedAt",
-    header: "更新時間",
-  },
+  // {
+  //   accessorKey: "updatedAt",
+  //   header: "更新時間",
+  // },
   // 🚀 核心新增：最後一欄的「... 動作選單」
   {
     id: "actions",
