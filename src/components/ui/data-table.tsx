@@ -111,7 +111,7 @@ const columns: ColumnDef<ModelRecord>[] = [
       return (
         <DropdownMenu>
           {/* 在 Base UI 中，Trigger 不需要 asChild，這樣寫完全正確 */}
-          <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-slate-800 h-8 w-8 p-0">
+          <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0">
             <span className="sr-only">Open menu</span>
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>

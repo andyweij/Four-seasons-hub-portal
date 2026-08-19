@@ -43,7 +43,7 @@ export function ModelsPage() {
       <header className="flex items-end justify-between border-b border-gray-800 pb-5">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-teal-400 mb-1">MODEL CATALOG</p>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white m-0">模型管理</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground m-0">模型管理</h1>
           <p className="text-sm text-gray-400 mt-2 m-0">管理地端模型、版本、部署與健康狀態。</p>
         </div>
 
