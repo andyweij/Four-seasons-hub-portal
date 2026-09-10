@@ -8,6 +8,6 @@ export interface ModelRecord {
   imagesSupport: number
   maxTokens: number
   version?: string
-  status?: string
+  downloadStatus?: string
   updatedAt?: string
 }

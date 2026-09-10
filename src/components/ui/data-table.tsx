@@ -27,6 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { modelsApi } from "../../core/api"
+
 
 interface ModelRecord {
   modelName: string
@@ -38,7 +40,7 @@ interface ModelRecord {
   imagesSupport: number
   maxTokens: number
   version?: string
-  status?: string
+  downloadStatus?: string
   updatedAt?: string
 }
 
@@ -73,14 +75,14 @@ const columns: ColumnDef<ModelRecord>[] = [
   //   header: "版本",
   // },
   {
-    accessorKey: "status",
+    accessorKey: "downloadStatus",
     header: "健康狀態",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string
+      const status = row.getValue("downloadStatus") as string
       let variant: "default" | "secondary" | "destructive" | "outline" = "default"
 
-      if (status === "Healthy") variant = "default"
-      else if (status === "downloaded") variant = "secondary"
+      if (status === "complete") variant = "default"
+      else if (status === "downloading") variant = "secondary"
       else variant = "destructive"
 
       return (
@@ -100,11 +102,18 @@ const columns: ColumnDef<ModelRecord>[] = [
     header: "操作",
     cell: ({ row }) => {
       const model = row.original // 取得當前這一列的完整物件資料
-      const isDownloaded = model.status === "downloaded"
+      const isDownloaded = model.downloadStatus === "complete"
 
       // 觸發指令的 Mock 腳本函式
       const handleAction = (actionType: string) => {
         console.log(`觸發模型 [${model.modelName}] 的行為: ${actionType}`)
+        modelsApi.createModel({ model_name: model.modelName })
+          .then((data) => {
+            console.log("模型啟動中...", data)
+          })
+          .catch((err) => {
+            console.error("模型啟動失敗", err)
+          })
         // 您可以在這裡呼叫 Axios / Fetch API 發送請求給 Java Backend Gateway
       }
 

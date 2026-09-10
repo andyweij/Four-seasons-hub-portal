@@ -1,15 +1,16 @@
 import { createApiGroup } from '../client'
 import type { ModelRecord } from '../../../types'
+import type { CreateModelRequest } from '../../../dto/models.request'
 
-const modelsReq = createApiGroup('/v1/modelsMgt')
+const modelsReq = createApiGroup('/v1/mgt/models')
 
 export const modelsApi = {
   /** 取得所有註冊模型列表 (對應 /v1/modelsMgt/list) */
-  getModels: () => modelsReq.get<ModelRecord[]>(''),
+  getModels: () => modelsReq.get<{ "models": ModelRecord[] }>(''),
   /** 取得單一模型詳細資料 (對應 /v1/modelsMgt/{id}) */
   getModel: (id: string) => modelsReq.get<ModelRecord>(`/${id}`),
   /** 註冊/執行新模型 (對應 /v1/modelsMgt/runModelAPP) */
-  createModel: (data: Partial<ModelRecord>) => modelsReq.post<ModelRecord>('/runModelAPP', data),
+  createModel: (data: CreateModelRequest) => modelsReq.post<ModelRecord>('/run', data),
   /** 更新模型設定 (對應 /v1/modelsMgt/{id}) */
   updateModel: (id: string, data: Partial<ModelRecord>) => modelsReq.put<ModelRecord>(`/${id}`, data),
   /** 刪除模型 (對應 /v1/modelsMgt/{id}) */

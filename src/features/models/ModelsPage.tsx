@@ -13,7 +13,7 @@ export function ModelsPage() {
     modelsApi.getModels()
       .then((data) => {
         console.log(data)
-        setModels(data)
+        setModels(data.models ?? [])
       })
       .catch((err) => {
         console.warn("無法連線至後端 API，改用 Mock 資料展示:", err.message)
@@ -28,7 +28,7 @@ export function ModelsPage() {
             imagesSupport: 0,
             maxTokens: 8192,
             version: "v1.0.0",
-            status: "Healthy",
+            downloadStatus: "Healthy",
             updatedAt: "2026-07-12"
           }
         ])
