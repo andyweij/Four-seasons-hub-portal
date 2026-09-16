@@ -15,6 +15,8 @@ export const chatApi = {
   /** 取得 SSE 串流聊天的端點 URL (供 EventSource 或 fetch stream 使用) */
   getStreamUrl: (sessionId: string) => getApiUrl(`/chat/sessions/${sessionId}/stream`),
   /** 送出訊息並建立串流 (POST /v1/chat/stream)，回傳原生 Response 供 ReadableStream 讀取 */
+  getRunningModels: (userId?: string) =>
+    chatReq.get<string[] | { models: string[] }>('/models', userId ? { params: { userId } } : undefined),
   createStream: async (data: CreateStreamRequest): Promise<Response> => {
     const url = getApiUrl('/v1/chat/stream')
     const token = await apiClient.getToken()

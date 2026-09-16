@@ -15,25 +15,31 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState<string>('') // 使用者輸入的文字
   const [isStreaming, setIsStreaming] = useState<boolean>(false)
-
+  const [runningModels, setRunningModels] = useState<string[]>([])
+  // 當前選擇的模型（給予預設值防呆）
+  const [selectedModel, setSelectedModel] = useState<string>("無運行中模型")
   useEffect(() => {
     if (!username) return
-    chatApi
-      .getSessions(username)
-      .then((res) => {
-        console.log(res)
-        setSessions(res)
+    // 1. 取得歷史對話
+    chatApi.getSessions(username)
+      .then((res) => setSessions(res))
+      .catch((err) => console.warn('無法取得對話紀錄:', err))
+    // 2. 取得目前運行中的模型
+    chatApi.getRunningModels(username)
+      .then((res: any) => {
+        console.log('運行中模型列表:', res)
+        // 相容後端回傳 ['modelA', 'modelB'] 或 { models: ['modelA'] } 或物件陣列結構
+        const rawList = Array.isArray(res) ? res : res?.models ?? []
+        const modelNames = rawList.map((item: any) =>
+          typeof item === 'string' ? item : (item.modelName || item.name || '')
+        ).filter(Boolean)
+        if (modelNames.length > 0) {
+          setRunningModels(modelNames)
+          setSelectedModel(modelNames[0]) // 自動將第一個運行中的模型設為預設
+        }
       })
       .catch((err) => {
-        console.warn('無法連線至後端 API，改用 Mock 資料展示:', err.message)
-        setSessions([
-          {
-            conversationId: '8a993aa1-a6cb-4f77-a9e2-d7aaff77f912',
-            selectModel: 'DeepSeek-R1-Distill-Qwen-1.5B',
-            lastModifyDttm: '2022-01-01T00:00:00Z',
-            title: 'DeepSeek-R1-Distill-Qwen-1.5B',
-          },
-        ])
+        console.warn('無法取得運行中模型清單，使用預設值:', err)
       })
   }, [username])
 
@@ -67,8 +73,8 @@ export function ChatPage() {
 
     // 3. 組裝後端所需的 Request Body (CreateStreamRequest)
     const payload: CreateStreamRequest = {
-      model: 'Qwen3-4B-Thinking-2507',
-      messages: updatedMessages,
+      model: selectedModel,
+      messages: [userMsg],
       stream: true,
     }
 
@@ -217,10 +223,35 @@ export function ChatPage() {
         </aside>
         <article className="chat-main">
           <div className="chat-config">
-            <span>模型：Qwen3-4B-Thinking-2507</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>模型：</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={isStreaming}
+                style={{
+                  background: 'var(--portal-input-bg, #0f172a)',
+                  color: 'inherit',
+                  border: '1px solid var(--portal-input-border, #334155)',
+                  borderRadius: '6px',
+                  padding: '2px 8px',
+                  fontSize: '0.82rem',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {runningModels.length === 0 ? (
+                  <option value={selectedModel}>{selectedModel}</option>
+                ) : (
+                  runningModels.map((modelName) => (
+                    <option key={modelName} value={modelName}>
+                      {modelName}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
             <span>Agent：尚未選擇</span>
           </div>
-
           {messages.length === 0 ? (
             <div className="empty-state">
               <strong>開始一段對話</strong>
