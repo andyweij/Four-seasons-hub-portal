@@ -14,7 +14,7 @@ export const modelsApi = {
   /** 更新模型設定 (對應 /v1/modelsMgt/{id}) */
   updateModel: (id: string, data: Partial<ModelRecord>) => modelsReq.put<ModelRecord>(`/${id}`, data),
   /** 刪除模型 (對應 /v1/modelsMgt/{id}) */
-  deleteModel: (id: string) => modelsReq.delete(`/${id}`),
+  deleteModel: (id: string) => modelsReq.delete(`/disable-model/${id}`),
   /** 測試模型連線與健康狀態 (對應 /v1/modelsMgt/{id}/health) */
   checkHealth: (id: string) => modelsReq.get<{ status: string; latency?: number }>(`/${id}/health`),
 }

@@ -1,4 +1,4 @@
-import { createApiGroup } from '../client'
+import { createApiGroup, apiClient } from '../client'
 import { getApiUrl } from '../config'
 import type { ChatSession, ChatMessage, CreateStreamRequest } from '../../../types'
 
@@ -14,6 +14,38 @@ export const chatApi = {
   getMessages: (sessionId: string) => chatReq.get<ChatMessage[]>(`/sessions/${sessionId}/messages`),
   /** 取得 SSE 串流聊天的端點 URL (供 EventSource 或 fetch stream 使用) */
   getStreamUrl: (sessionId: string) => getApiUrl(`/chat/sessions/${sessionId}/stream`),
-  /** 送出訊息並建立串流 (POST /v1/chat/completions) */
-  createStream: (data: CreateStreamRequest) => chatReq.post('/completions', data),
+  /** 送出訊息並建立串流 (POST /v1/chat/stream)，回傳原生 Response 供 ReadableStream 讀取 */
+  createStream: async (data: CreateStreamRequest): Promise<Response> => {
+    const url = getApiUrl('/v1/chat/stream')
+    const token = await apiClient.getToken()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      let errorMessage = `Stream request failed with status ${response.status}`
+      try {
+        const errorData = await response.json()
+        if (errorData?.message || errorData?.error) {
+          errorMessage = errorData.message || errorData.error
+        }
+      } catch {
+        // ignore
+      }
+      throw new Error(errorMessage)
+    }
+
+    return response
+  },
 }

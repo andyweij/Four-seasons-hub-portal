@@ -107,13 +107,23 @@ const columns: ColumnDef<ModelRecord>[] = [
       // 觸發指令的 Mock 腳本函式
       const handleAction = (actionType: string) => {
         console.log(`觸發模型 [${model.modelName}] 的行為: ${actionType}`)
-        modelsApi.createModel({ model_name: model.modelName })
-          .then((data) => {
-            console.log("模型啟動中...", data)
-          })
-          .catch((err) => {
-            console.error("模型啟動失敗", err)
-          })
+        if (actionType === "start") {
+          modelsApi.createModel({ model_name: model.modelName })
+            .then((data) => {
+              console.log("模型啟動中...", data)
+            })
+            .catch((err) => {
+              console.error("模型啟動失敗", err)
+            })
+        } else if (actionType === "stop") {
+          modelsApi.deleteModel(model.modelName)
+            .then((data) => {
+              console.log("模型已刪除", data)
+            })
+            .catch((err) => {
+              console.error("模型刪除失敗", err)
+            })
+        }
         // 您可以在這裡呼叫 Axios / Fetch API 發送請求給 Java Backend Gateway
       }
 
