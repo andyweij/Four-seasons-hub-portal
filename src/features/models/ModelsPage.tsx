@@ -26,7 +26,7 @@ export function ModelsPage() {
             reasoning: false,
             reasoningEffort: false,
             imagesSupport: 0,
-            maxTokens: 8192,
+            maxModelLen: 8192,
             version: "v1.0.0",
             downloadStatus: "Healthy",
             updatedAt: "2026-07-12"

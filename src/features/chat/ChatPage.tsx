@@ -18,6 +18,29 @@ export function ChatPage() {
   const [runningModels, setRunningModels] = useState<string[]>([])
   // 當前選擇的模型（給予預設值防呆）
   const [selectedModel, setSelectedModel] = useState<string>("無運行中模型")
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  // 點擊切換 session
+  const handleSelectSession = async (session: ChatSession) => {
+    if (isStreaming) return
+    setCurrentSessionId(session.conversationId)
+    setSelectedModel(session.selectModel || selectedModel)
+    // 載入該對話的歷史訊息
+    try {
+      // const history = await chatApi.getMessages(session.conversationId)
+      // setMessages(history ?? [])
+      console.log('get messages', session.conversationId)
+    } catch (err) {
+      console.error("載入歷史訊息失敗:", err)
+    }
+  }
+
+  // 建立新對話（重置）
+  const handleNewChat = () => {
+    if (isStreaming) return
+    setCurrentSessionId(null)
+    setMessages([])
+  }
+
   useEffect(() => {
     if (!username) return
     // 1. 取得歷史對話
@@ -76,6 +99,7 @@ export function ChatPage() {
       model: selectedModel,
       messages: [userMsg],
       stream: true,
+      conversationId: "",
     }
 
     try {
@@ -216,11 +240,48 @@ export function ChatPage() {
       <div className="chat-workspace">
         <aside className="chat-panel">
           <strong>工作階段</strong>
-          <button type="button" className="secondary-button" disabled>
+          {/* 啟用「建立新對話」按鈕 */}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleNewChat}
+            disabled={isStreaming}
+            style={{ cursor: isStreaming ? 'not-allowed' : 'pointer' }}
+          >
             ＋ 建立新對話
           </button>
-          <p>尚無對話紀錄</p>
+          {sessions.length === 0 && <p className="text-muted-foreground text-sm">尚無對話紀錄</p>}
+          <div className="flex flex-col gap-1 mt-2">
+            {sessions.map((session) => {
+              const isActive = currentSessionId === session.conversationId
+              return (
+                <div
+                  key={session.conversationId}
+                  onClick={() => handleSelectSession(session)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    backgroundColor: isActive ? 'var(--portal-accent-bg, #81abf0ff)' : 'transparent',
+                    border: isActive ? '1px solid #0d9488' : '1px solid transparent',
+                    transition: 'background-color 0.2s',
+                  }}
+                  className="hover:bg-slate-800/60"
+                >
+                  {/* 主標題：對話標題 */}
+                  <p style={{ margin: 0, fontWeight: isActive ? 600 : 400, fontSize: '0.9rem' }}>
+                    {session.title || '新對話'}
+                  </p>
+                  {/* 副資訊：模型名稱 */}
+                  <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                    {session.selectModel}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </aside>
+
         <article className="chat-main">
           <div className="chat-config">
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

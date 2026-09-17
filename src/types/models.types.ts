@@ -6,8 +6,9 @@ export interface ModelRecord {
   reasoning: boolean
   reasoningEffort: boolean
   imagesSupport: number
-  maxTokens: number
+  maxModelLen: number
   version?: string
   downloadStatus?: string
+  status?: string
   updatedAt?: string
 }

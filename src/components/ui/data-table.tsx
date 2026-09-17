@@ -27,22 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { modelsApi } from "../../core/api"
+import { modelsApi, type ModelRecord } from "../../core/api"
 
-
-interface ModelRecord {
-  modelName: string
-  modelPath: string
-  url: string
-  description: string
-  reasoning: boolean
-  reasoningEffort: boolean
-  imagesSupport: number
-  maxTokens: number
-  version?: string
-  downloadStatus?: string
-  updatedAt?: string
-}
 
 interface DataTableProps {
   data: ModelRecord[]
@@ -66,29 +52,41 @@ const columns: ColumnDef<ModelRecord>[] = [
   //   cell: ({ row }) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-teal-400">{row.getValue("modelPath")}</code>,
   // },
   {
-    accessorKey: "maxTokens",
+    accessorKey: "maxModelLen",
     header: "Context 限制",
-    cell: ({ row }) => <span>{row.getValue("maxTokens")} tokens</span>,
+    cell: ({ row }) => {
+      const maxModelLen = row.original.maxModelLen
+      if (maxModelLen == -1)
+        return <span>無限制</span>
+      else
+        return <span>{maxModelLen} tokens</span>
+    },
   },
-  // {
-  //   accessorKey: "version",
-  //   header: "版本",
-  // },
   {
     accessorKey: "downloadStatus",
     header: "健康狀態",
     cell: ({ row }) => {
-      const status = row.getValue("downloadStatus") as string
-      let variant: "default" | "secondary" | "destructive" | "outline" = "default"
-
-      if (status === "complete") variant = "default"
-      else if (status === "downloading") variant = "secondary"
-      else variant = "destructive"
+      const downloadStatus = row.original.downloadStatus ?? "unknown"
+      const status = row.original.status ?? "idle"
+      // 1. 下載狀態樣式
+      let downloadVariant: "default" | "secondary" | "destructive" | "outline" = "default"
+      if (downloadStatus === "complete") downloadVariant = "default"
+      else if (downloadStatus === "downloading") downloadVariant = "secondary"
+      else downloadVariant = "destructive"
+      // 2. 服務運行狀態樣式
+      let statusVariant: "default" | "secondary" | "destructive" | "outline" = "outline"
+      if (status === "ready") statusVariant = "default"
+      else if (status === "not_installed") statusVariant = "secondary"
 
       return (
-        <Badge variant={variant}>
-          {status}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={downloadVariant}>
+            {downloadStatus}
+          </Badge>
+          <Badge variant={statusVariant}>
+            {status}
+          </Badge>
+        </div>
       )
     },
   },
