@@ -12,6 +12,7 @@ import { useAuth } from '../../core/auth/useAuth'
 export function ChatPage() {
   const { username } = useAuth()
   const [sessions, setSessions] = useState<ChatSession[]>([])
+
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState<string>('') // 使用者輸入的文字
   const [isStreaming, setIsStreaming] = useState<boolean>(false)
@@ -25,10 +26,32 @@ export function ChatPage() {
     setCurrentSessionId(session.conversationId)
     setSelectedModel(session.selectModel || selectedModel)
     // 載入該對話的歷史訊息
+    setMessages([])
     try {
-      // const history = await chatApi.getMessages(session.conversationId)
-      // setMessages(history ?? [])
-      console.log('get messages', session.conversationId)
+      const historyRes: any = await chatApi.getMessages(session.conversationId)
+      console.log('取得歷史訊息回應:', historyRes)
+      // 1. 防呆：相容直接回傳陣列或包裝在 messages 屬性中的結構
+      const rawList: any[] = Array.isArray(historyRes)
+        ? historyRes
+        : historyRes?.messages ?? []
+      // 2. 轉換格式，並相容 content 為純字串或物件陣列的情境
+      const formattedMessages: ChatMessage[] = rawList.map((c) => {
+        let content: ChatContent[] = []
+        if (Array.isArray(c.content)) {
+          content = c.content
+        } else if (typeof c.content === 'string') {
+          content = [{ type: 'text', text: c.content }]
+        } else if (c.text) {
+          content = [{ type: 'text', text: c.text }]
+        }
+        return {
+          role: c.role,
+          content,
+          timestamp: c.timestamp || new Date().toISOString(),
+        }
+      })
+      // 3. 一次性更新所有歷史訊息
+      setMessages(formattedMessages)
     } catch (err) {
       console.error("載入歷史訊息失敗:", err)
     }
@@ -167,8 +190,22 @@ export function ChatPage() {
                 return next
               })
             } else if (event.type === 'ack') {
-              console.log('SSE Ack Received:', event.conversation_id)
+              const conversationId = event.conversation_id
+              if (conversationId !== undefined) {
+                setCurrentSessionId(conversationId)
+              }
+              console.log('SSE Ack Received:', conversationId)
             } else if (event.type === 'done') {
+              const createSession: ChatSession = {
+                conversationId: currentSessionId || "",
+                title: userMsg.content[0].text,
+                selectModel: selectedModel,
+                lastModifyDttm: new Date().toISOString(),
+              }
+              setSessions((prev) => {
+                const next = [...prev, createSession]
+                return next
+              })
               console.log('SSE Stream Done:', event.usage)
             }
           } catch (parseErr) {
