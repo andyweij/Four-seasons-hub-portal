@@ -7,6 +7,7 @@ import {
   getPaginationRowModel,
 } from "@tanstack/react-table"
 import { MoreHorizontal, Download, Trash2, Play, Square, Settings } from "lucide-react"
+import { ModelStatusIndicator } from '@/features/models/components/ModelStatusIndicator'
 
 import {
   Table,
@@ -62,33 +63,11 @@ const columns: ColumnDef<ModelRecord>[] = [
         return <span>{maxModelLen} tokens</span>
     },
   },
+  // 在 columns 定義中修改「健康狀態」這一欄：
   {
     accessorKey: "downloadStatus",
     header: "健康狀態",
-    cell: ({ row }) => {
-      const downloadStatus = row.original.downloadStatus ?? "unknown"
-      const status = row.original.status ?? "idle"
-      // 1. 下載狀態樣式
-      let downloadVariant: "default" | "secondary" | "destructive" | "outline" = "default"
-      if (downloadStatus === "complete") downloadVariant = "default"
-      else if (downloadStatus === "downloading") downloadVariant = "secondary"
-      else downloadVariant = "destructive"
-      // 2. 服務運行狀態樣式
-      let statusVariant: "default" | "secondary" | "destructive" | "outline" = "outline"
-      if (status === "ready") statusVariant = "default"
-      else if (status === "not_installed") statusVariant = "secondary"
-
-      return (
-        <div className="flex items-center gap-1.5">
-          <Badge variant={downloadVariant}>
-            {downloadStatus}
-          </Badge>
-          <Badge variant={statusVariant}>
-            {status}
-          </Badge>
-        </div>
-      )
-    },
+    cell: ({ row }) => <ModelStatusIndicator model={row.original} />,
   },
   // {
   //   accessorKey: "updatedAt",

@@ -17,21 +17,6 @@ export function ModelsPage() {
       })
       .catch((err) => {
         console.warn("無法連線至後端 API，改用 Mock 資料展示:", err.message)
-        setModels([
-          {
-            modelName: "Llama-3-8B-Instruct",
-            modelPath: "/models/llama3",
-            url: "http://localhost:8000",
-            description: "地端推論主模型 (vLLM 部署)",
-            reasoning: false,
-            reasoningEffort: false,
-            imagesSupport: 0,
-            maxModelLen: 8192,
-            version: "v1.0.0",
-            downloadStatus: "Healthy",
-            updatedAt: "2026-07-12"
-          }
-        ])
       })
   }, [])
 

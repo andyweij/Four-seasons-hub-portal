@@ -232,7 +232,8 @@ a {
   color: var(--foreground);
 }
 
-.user-card strong, .user-card span {
+.user-card strong,
+.user-card span {
   display: block;
 }
 
@@ -310,7 +311,9 @@ a {
   gap: 16px;
 }
 
-.stat-card, .welcome-card, .placeholder-card {
+.stat-card,
+.welcome-card,
+.placeholder-card {
   border: 1px solid var(--portal-card-border);
   border-radius: 12px;
   background: var(--portal-card-bg);
@@ -325,7 +328,8 @@ a {
   padding: 20px;
 }
 
-.stat-card span, .stat-card small {
+.stat-card span,
+.stat-card small {
   color: var(--muted-foreground);
 }
 
@@ -335,19 +339,22 @@ a {
   color: var(--foreground);
 }
 
-.welcome-card, .placeholder-card {
+.welcome-card,
+.placeholder-card {
   max-width: 780px;
   margin-top: 24px;
   padding: 24px;
 }
 
-.welcome-card h2, .placeholder-card h2 {
+.welcome-card h2,
+.placeholder-card h2 {
   margin-top: 0;
   font-size: 1.05rem;
   color: var(--foreground);
 }
 
-.welcome-card p, .placeholder-card p {
+.welcome-card p,
+.placeholder-card p {
   color: var(--muted-foreground);
   line-height: 1.65;
 }
@@ -419,7 +426,8 @@ a {
   gap: 20px;
 }
 
-.primary-button, .secondary-button {
+.primary-button,
+.secondary-button {
   padding: 9px 13px;
   border-radius: 7px;
   font: inherit;
@@ -439,7 +447,8 @@ a {
   color: var(--portal-btn-text);
 }
 
-.primary-button:disabled, .secondary-button:disabled {
+.primary-button:disabled,
+.secondary-button:disabled {
   opacity: .55;
   cursor: not-allowed;
 }
@@ -462,7 +471,8 @@ a {
   text-align: left;
 }
 
-.data-card th, .data-card td {
+.data-card th,
+.data-card td {
   padding: 15px 20px;
   border-bottom: 1px solid var(--portal-card-border);
   white-space: nowrap;
@@ -591,30 +601,40 @@ a {
   .app-shell {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--portal-sidebar-border);
   }
+
   .sidebar nav {
     display: flex;
     gap: 18px;
     overflow-x: auto;
   }
+
   .nav-group {
     min-width: max-content;
   }
+
   .user-card {
     display: none;
   }
+
   .content {
     padding: 30px 22px;
   }
-  .stat-grid, .stat-grid-three, .settings-grid {
+
+  .stat-grid,
+  .stat-grid-three,
+  .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .chat-workspace {
     grid-template-columns: 1fr;
   }
+
   .chat-panel {
     border-right: 0;
     border-bottom: 1px solid var(--portal-card-border);
@@ -626,15 +646,20 @@ a {
     align-items: flex-start;
     flex-direction: column;
   }
+
   .pagination-controls {
     flex-wrap: wrap;
   }
 }
 
 @media (max-width: 500px) {
-  .stat-grid, .stat-grid-three, .settings-grid {
+
+  .stat-grid,
+  .stat-grid-three,
+  .settings-grid {
     grid-template-columns: 1fr;
   }
+
   .page-header-with-action {
     align-items: flex-start;
     flex-direction: column;
@@ -688,9 +713,11 @@ a {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
