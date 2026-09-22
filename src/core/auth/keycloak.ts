@@ -35,16 +35,12 @@ export function initKeycloak(keycloak: Keycloak): Promise<boolean> {
     return initPromise
   }
 
-  keycloak.onTokenExpired = () => {
-    keycloak.updateToken(30).catch(() => {
-      void keycloak.login()
-    })
-  }
-
   initPromise = keycloak.init({
     onLoad: 'login-required',
+    flow: 'standard',
     pkceMethod: 'S256',
     checkLoginIframe: false,
+    redirectUri: window.location.href,
   })
 
   return initPromise

@@ -2,9 +2,9 @@ import { Outlet } from 'react-router-dom'
 import { useAuth } from './useAuth'
 
 export function ProtectedRoute() {
-  const { isConfigured, isReady, isAuthenticated } = useAuth()
+  const { isConfigured, isReady, isAuthenticated, isBypassed } = useAuth()
 
-  if (!isConfigured) {
+  if (isBypassed) {
     return <Outlet />
   }
 

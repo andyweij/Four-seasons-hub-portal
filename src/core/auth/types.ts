@@ -3,9 +3,13 @@ export type AuthContextValue = {
   isBypassed: boolean
   isReady: boolean
   isAuthenticated: boolean
-  token: string | undefined
+  error: string | null
   username: string | undefined
+
   login: () => Promise<void>
   logout: () => Promise<void>
+  retry: () => void
+
   hasRealmRole: (role: string) => boolean
+  hasResourceRole: (role: string) => boolean
 }

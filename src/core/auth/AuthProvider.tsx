@@ -15,7 +15,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(isBypassed)
   const [token, setToken] = useState<string | undefined>()
   const [username, setUsername] = useState<string | undefined>(isBypassed ? '本機開發者' : undefined)
-
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     if (isBypassed || !isConfigured) {
       return
@@ -37,7 +37,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
     keycloak.onAuthSuccess = () => syncAuthState(true)
     keycloak.onAuthLogout = () => syncAuthState(false)
     keycloak.onAuthRefreshSuccess = () => syncAuthState(true)
+    keycloak.onAuthSuccess = () => {
+      syncAuthState(true)
+      setError(null)
+    }
 
+    keycloak.onAuthLogout = () => {
+      syncAuthState(false)
+    }
+
+    keycloak.onAuthError = () => {
+      syncAuthState(false)
+      setError('Keycloak 登入驗證失敗')
+    }
+
+    keycloak.onAuthRefreshSuccess = () => {
+      syncAuthState(true)
+    }
+
+    keycloak.onAuthRefreshError = () => {
+      keycloak.clearToken()
+      syncAuthState(false)
+      setError('登入狀態已失效，請重新登入')
+    }
+
+    keycloak.onTokenExpired = () => {
+      void keycloak.updateToken(30).catch(() => {
+        keycloak.clearToken()
+        void keycloak.login({
+          redirectUri: window.location.href,
+        })
+      })
+    }
     void initKeycloak(keycloak)
       .then((authenticated) => {
         if (cancelled) {
@@ -45,17 +76,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         syncAuthState(authenticated)
+        setError(null)
         setIsReady(true)
       })
-      .catch(() => {
+      .catch((cause: unknown) => {
         if (cancelled) {
           return
         }
 
         syncAuthState(false)
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : '無法連線至登入服務',
+        )
         setIsReady(true)
       })
-
     return () => {
       cancelled = true
     }
@@ -63,7 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value = useMemo<AuthContextValue>(() => {
     const keycloak = getKeycloak()
-
+    const resourceClientId = import.meta.env.VITE_KEYCLOAK_RESOURCE_CLIENT_ID
     return {
       isConfigured,
       isBypassed,
@@ -71,6 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated,
       token,
       username,
+      error,
       login: async () => {
         if (!keycloak) {
           return
@@ -85,7 +122,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         await keycloak.logout({ redirectUri: window.location.origin })
       },
+      retry: () => {
+        window.location.reload()
+      },
       hasRealmRole: (role: string) => keycloak?.hasRealmRole(role) ?? false,
+      hasResourceRole: (role: string) => resourceClientId ? keycloak?.hasResourceRole(role, resourceClientId) ?? false : false,
     }
   }, [isConfigured, isBypassed, isReady, isAuthenticated, token, username])
 
