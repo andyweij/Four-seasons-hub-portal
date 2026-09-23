@@ -1,52 +1,182 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { CloudCog, Loader2, RefreshCw } from 'lucide-react'
 import { DataTable } from "../../components/ui/data-table"
 import { Button } from "../../components/ui/button"
-import { modelsApi, type ModelRecord } from "../../core/api"
+import {
+  cloudConnectionsApi,
+  modelsApi,
+  type CloudConnectionSummary,
+  type ModelRecord,
+} from "../../core/api"
+import { CloudConnectionSheet } from './components/CloudConnectionSheet'
+import { CloudModelsTable } from './components/CloudModelsTable'
+import {
+  ModelSourceTabs,
+  type ModelSource,
+} from './components/ModelSourceTabs'
 
 export function ModelsPage() {
-  // 正確初始化狀態為陣列型別
-  const [models, setModels] = useState<ModelRecord[]>([])
-  const fetchModels = () => {
-    modelsApi.getModels()
-      .then((data) => setModels(data.models ?? []))
-      .catch((err) => console.warn("獲取模型失敗:", err))
-  }
-  useEffect(() => {
-    fetchModels()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const source: ModelSource = searchParams.get('source') === 'cloud' ? 'cloud' : 'local'
+  const [localModels, setLocalModels] = useState<ModelRecord[]>([])
+  const [cloudConnections, setCloudConnections] = useState<CloudConnectionSummary[]>([])
+  const [localLoading, setLocalLoading] = useState(true)
+  const [cloudLoading, setCloudLoading] = useState(false)
+  const [cloudLoaded, setCloudLoaded] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [cloudError, setCloudError] = useState<string | null>(null)
+  const [createSheetOpen, setCreateSheetOpen] = useState(false)
+
+  const fetchLocalModels = useCallback(async () => {
+    setLocalLoading(true)
+    setLocalError(null)
+    try {
+      const data = await modelsApi.getModels()
+      setLocalModels(data.models ?? [])
+    } catch (error) {
+      console.warn('獲取地端模型失敗:', error)
+      setLocalError(error instanceof Error ? error.message : '無法取得地端模型')
+    } finally {
+      setLocalLoading(false)
+    }
   }, [])
 
-  return (
-    // 使用與專案風格一致的原生容器，並加入 Tailwind 的 flex 縱向排版
-    <div className="flex flex-col gap-6 w-full min-h-screen">
+  const fetchCloudConnections = useCallback(async () => {
+    setCloudLoading(true)
+    setCloudError(null)
+    try {
+      setCloudConnections(await cloudConnectionsApi.list())
+    } catch (error) {
+      console.warn('獲取雲端模型失敗:', error)
+      setCloudError(error instanceof Error ? error.message : '無法取得雲端模型')
+    } finally {
+      setCloudLoaded(true)
+      setCloudLoading(false)
+    }
+  }, [])
 
-      {/* 頂部標頭區域：結合 Flexbox 讓按鈕與標題完美分開兩側 */}
-      <header className="flex items-end justify-between border-b border-gray-800 pb-5">
+  useEffect(() => {
+    void fetchLocalModels()
+  }, [fetchLocalModels])
+
+  useEffect(() => {
+    if (source === 'cloud' && !cloudLoaded && !cloudLoading) {
+      void fetchCloudConnections()
+    }
+  }, [cloudLoaded, cloudLoading, fetchCloudConnections, source])
+
+  const handleSourceChange = (nextSource: ModelSource) => {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('source', nextSource)
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  const handleCreated = async () => {
+    handleSourceChange('cloud')
+    await fetchCloudConnections()
+  }
+
+  return (
+    <div className="flex flex-col gap-6 w-full min-h-screen">
+      <header className="flex flex-col items-start justify-between gap-5 border-b border-border pb-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-teal-400 mb-1">MODEL CATALOG</p>
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-primary">MODEL CATALOG</p>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground m-0">模型管理</h1>
-          <p className="text-sm text-gray-400 mt-2 m-0">管理地端模型、版本、部署與健康狀態。</p>
+          <p className="mt-2 m-0 text-sm text-muted-foreground">
+            管理地端部署，以及可供使用者選擇的雲端模型連線。
+          </p>
         </div>
 
-        {/* 主要操作按鈕 */}
         <Button
           variant="default"
-          className="bg-teal-600 hover:bg-teal-500 text-white font-medium px-4 py-2 rounded-md shadow-sm"
-          onClick={() => console.log("新增模型彈窗")}
+          size="lg"
+          className="w-full sm:w-auto"
+          onClick={() => setCreateSheetOpen(true)}
         >
-          ＋ 新增模型
+          <CloudCog />
+          新增雲端模型
         </Button>
       </header>
 
-      {/* 資料表格主區塊：寬度完全填滿，不受限擠壓 */}
-      <main className="w-full overflow-hidden mt-2">
-        {models.length === 0 ? (
-          <div className="w-full p-12 border rounded-xl border-dashed border-gray-700 text-center text-sm text-gray-400 bg-gray-900/30">
-            完成 Gateway 串接後，已註冊模型會顯示於此。
-          </div>
-        ) : (
-          <DataTable data={models} onRefresh={fetchModels} />
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <ModelSourceTabs
+          value={source}
+          localCount={localModels.length}
+          cloudCount={cloudConnections.length}
+          onChange={handleSourceChange}
+        />
+        <p className="m-0 text-sm text-muted-foreground">
+          {source === 'local'
+            ? '顯示已註冊於此平台的地端模型'
+            : '僅顯示由管理員建立的雲端連線'}
+        </p>
+      </div>
+
+      <main className="w-full min-w-0">
+        {source === 'local' && (
+          localLoading ? (
+            <LoadingState label="正在載入地端模型" />
+          ) : localError ? (
+            <ErrorState message={localError} onRetry={() => void fetchLocalModels()} />
+          ) : localModels.length === 0 ? (
+            <div className="w-full rounded-xl border border-dashed bg-card/40 p-12 text-center text-sm text-muted-foreground">
+              完成 Gateway 串接後，已註冊的地端模型會顯示於此。
+            </div>
+          ) : (
+            <DataTable data={localModels} onRefresh={() => void fetchLocalModels()} />
+          )
+        )}
+
+        {source === 'cloud' && (
+          cloudLoading && !cloudLoaded ? (
+            <LoadingState label="正在載入雲端模型" />
+          ) : cloudError ? (
+            <ErrorState message={cloudError} onRetry={() => void fetchCloudConnections()} />
+          ) : (
+            <CloudModelsTable
+              data={cloudConnections}
+              onRefresh={fetchCloudConnections}
+            />
+          )
         )}
       </main>
+
+      <CloudConnectionSheet
+        open={createSheetOpen}
+        onOpenChange={setCreateSheetOpen}
+        onCreated={handleCreated}
+      />
+    </div>
+  )
+}
+
+function LoadingState({ label }: { label: string }) {
+  return (
+    <div className="grid min-h-48 place-content-center rounded-xl border bg-card/40 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2">
+        <Loader2 className="size-4 animate-spin" />
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <div className="grid min-h-48 place-content-center rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+      <strong className="text-sm font-medium text-destructive">無法載入模型清單</strong>
+      <p className="mt-2 max-w-md text-sm text-muted-foreground">{message}</p>
+      <Button className="mx-auto mt-4" type="button" variant="outline" onClick={onRetry}>
+        <RefreshCw />
+        重新載入
+      </Button>
     </div>
   )
 }
