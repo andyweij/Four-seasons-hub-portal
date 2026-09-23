@@ -6,18 +6,13 @@ import { modelsApi, type ModelRecord } from "../../core/api"
 export function ModelsPage() {
   // 正確初始化狀態為陣列型別
   const [models, setModels] = useState<ModelRecord[]>([])
-
-  useEffect(() => {
-    // 透過集中管理的 modelsApi 呼叫後端 API
-    // 若後端 Gateway 尚未啟動或連線失敗，則 catch 降級使用 Mock 資料，確保開發測試無縫進行
+  const fetchModels = () => {
     modelsApi.getModels()
-      .then((data) => {
-        console.log(data)
-        setModels(data.models ?? [])
-      })
-      .catch((err) => {
-        console.warn("無法連線至後端 API，改用 Mock 資料展示:", err.message)
-      })
+      .then((data) => setModels(data.models ?? []))
+      .catch((err) => console.warn("獲取模型失敗:", err))
+  }
+  useEffect(() => {
+    fetchModels()
   }, [])
 
   return (
@@ -49,7 +44,7 @@ export function ModelsPage() {
             完成 Gateway 串接後，已註冊模型會顯示於此。
           </div>
         ) : (
-          <DataTable data={models} />
+          <DataTable data={models} onRefresh={fetchModels} />
         )}
       </main>
     </div>

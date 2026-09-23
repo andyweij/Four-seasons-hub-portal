@@ -29,11 +29,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { modelsApi, type ModelRecord } from "../../core/api"
-
+import { useEffect, useState } from 'react'
 
 interface DataTableProps {
   data: ModelRecord[]
+  onRefresh?: () => void // 提供外層回調
 }
+
 
 // 在此定義您的顯示欄位，並加入最後一欄的動作操作
 const columns: ColumnDef<ModelRecord>[] = [
@@ -47,11 +49,6 @@ const columns: ColumnDef<ModelRecord>[] = [
       </div>
     ),
   },
-  // {
-  //   accessorKey: "modelPath",
-  //   header: "部署路徑 / 標識",
-  //   cell: ({ row }) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-teal-400">{row.getValue("modelPath")}</code>,
-  // },
   {
     accessorKey: "maxModelLen",
     header: "Context 限制",
@@ -69,39 +66,30 @@ const columns: ColumnDef<ModelRecord>[] = [
     header: "健康狀態",
     cell: ({ row }) => <ModelStatusIndicator model={row.original} />,
   },
-  // {
-  //   accessorKey: "updatedAt",
-  //   header: "更新時間",
-  // },
-  // 🚀 核心新增：最後一欄的「... 動作選單」
   {
     id: "actions",
     header: "操作",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const model = row.original // 取得當前這一列的完整物件資料
       const isDownloaded = model.downloadStatus === "complete"
-
+      const isActived = model.status == "ready"
+      const [loading, setLoading] = useState(false)
       // 觸發指令的 Mock 腳本函式
-      const handleAction = (actionType: string) => {
-        console.log(`觸發模型 [${model.modelName}] 的行為: ${actionType}`)
-        if (actionType === "start") {
-          modelsApi.createModel({ model_name: model.modelName })
-            .then((data) => {
-              console.log("模型啟動中...", data)
-            })
-            .catch((err) => {
-              console.error("模型啟動失敗", err)
-            })
-        } else if (actionType === "stop") {
-          modelsApi.deleteModel(model.modelName)
-            .then((data) => {
-              console.log("模型已刪除", data)
-            })
-            .catch((err) => {
-              console.error("模型刪除失敗", err)
-            })
+      const handleAction = async (actionType: string) => {
+        try {
+          setLoading(true)
+          if (actionType === "start") {
+            await modelsApi.createModel({ model_name: model.modelName })
+          } else if (actionType === "stop") {
+            await modelsApi.deleteModel(model.modelName)
+          }
+          // 呼叫父層傳進來的 refresh，重新拉取最新狀態觸發重新渲染
+          (table.options.meta as any)?.onRefresh?.()
+        } catch (err) {
+          console.error(`模型操作 [${actionType}] 失敗:`, err)
+        } finally {
+          setLoading(false)
         }
-        // 您可以在這裡呼叫 Axios / Fetch API 發送請求給 Java Backend Gateway
       }
 
       return (
@@ -118,14 +106,23 @@ const columns: ColumnDef<ModelRecord>[] = [
 
             {isDownloaded ? (
               <>
-                <DropdownMenuItem onClick={() => handleAction("start")} className="flex items-center gap-2 cursor-pointer text-emerald-400 focus:bg-muted">
-                  <Play className="h-3.5 w-3.5" />
-                  <span>啟用</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleAction("stop")} className="flex items-center gap-2 cursor-pointer text-amber-400 focus:bg-muted">
-                  <Square className="h-3.5 w-3.5" />
-                  <span>停止</span>
-                </DropdownMenuItem>
+                {isActived ? (
+                  <DropdownMenuItem onClick={() => handleAction("stop")} className="text-amber-400 ...">
+                    <Square className="h-3.5 w-3.5" />
+                    <span>停止</span>
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => handleAction("start")} className="text-emerald-400 ...">
+                      <Play className="h-3.5 w-3.5" />
+                      <span>啟用</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleAction("delete")} className="text-destructive ...">
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>刪除模型</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -146,12 +143,16 @@ const columns: ColumnDef<ModelRecord>[] = [
   },
 ]
 
-export function DataTable({ data }: DataTableProps) {
+export function DataTable({ data, onRefresh }: DataTableProps) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    // 透過 meta 將函式傳遞給所有 cell 使用
+    meta: {
+      onRefresh,
+    },
   })
 
   return (

@@ -20,11 +20,14 @@ export function ChatPage() {
   // 當前選擇的模型（給予預設值防呆）
   const [selectedModel, setSelectedModel] = useState<string>("無運行中模型")
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+
   // 點擊切換 session
   const handleSelectSession = async (session: ChatSession) => {
     if (isStreaming) return
     setCurrentSessionId(session.conversationId)
-    setSelectedModel(session.selectModel || selectedModel)
+    if (runningModels.includes(session.selectModel)) {
+      setSelectedModel(session.selectModel)
+    }
     // 載入該對話的歷史訊息
     setMessages([])
     try {
@@ -287,8 +290,8 @@ export function ChatPage() {
           >
             ＋ 建立新對話
           </button>
-          {sessions.length === 0 && <p className="text-muted-foreground text-sm">尚無對話紀錄</p>}
-          <div className="flex flex-col gap-1 mt-2">
+          {sessions.length === 0 && <p className="text-muted-foreground text-sm ">尚無對話紀錄</p>}
+          <div className="flex flex-col mt-2 divide-y divide-border border-y border-border">
             {sessions.map((session) => {
               const isActive = currentSessionId === session.conversationId
               return (
@@ -299,8 +302,8 @@ export function ChatPage() {
                     padding: '8px 12px',
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--portal-accent-bg, #81abf0ff)' : 'transparent',
-                    border: isActive ? '1px solid #0d9488' : '1px solid transparent',
+                    backgroundColor: isActive ? 'var(--portal-accent-bg, #c8cdd4ff)' : 'transparent',
+                    // border: isActive ? '1px solid #0d9488' : '1px solid transparent',
                     transition: 'background-color 0.2s',
                   }}
                   className="hover:bg-slate-800/60"
