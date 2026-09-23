@@ -9,23 +9,31 @@ import { DashboardPage } from './features/dashboard/DashboardPage'
 import { KnowledgeBasesPage } from './features/knowledge-bases/KnowledgeBasesPage'
 import { ModelsPage } from './features/models/ModelsPage'
 import { ObservabilityPage } from './features/observability/ObservabilityPage'
+import { AdminRoute } from './core/auth/AdminRoute'
 
 export default function App() {
   return (
     <Routes>
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
+          {/* ✅ 所有登入使用者（包含普通 User）皆可進入 */}
           <Route path="chat" element={<ChatPage />} />
-          <Route path="models" element={<ModelsPage />} />
           <Route path="agents" element={<AgentsPage />} />
-          <Route path="knowledge-bases" element={<KnowledgeBasesPage />} />
-          <Route path="observability" element={<ObservabilityPage />} />
-          <Route path="audit-logs" element={<AuditLogsPage />} />
-          <Route path="admin" element={<AdminPage />} />
+
+          {/* 🔒 僅限 Admin 存取的頁面 */}
+          <Route element={<AdminRoute />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="models" element={<ModelsPage />} />
+            <Route path="knowledge-bases" element={<KnowledgeBasesPage />} />
+            <Route path="observability" element={<ObservabilityPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="admin" element={<AdminPage />} />
+          </Route>
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* 預設非 admin 導向至 chat */}
+      <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   )
 }
+

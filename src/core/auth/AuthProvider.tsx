@@ -15,7 +15,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(isBypassed)
   const [token, setToken] = useState<string | undefined>()
   const [username, setUsername] = useState<string | undefined>(isBypassed ? '本機開發者' : undefined)
+  const [roles, setRoles] = useState<string[]>(isBypassed ? ['admin'] : [])
   const [error, setError] = useState<string | null>(null)
+
   useEffect(() => {
     if (isBypassed || !isConfigured) {
       return
@@ -32,6 +34,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsAuthenticated(authenticated)
       setToken(keycloak.token)
       setUsername(keycloak.tokenParsed?.preferred_username)
+      const realmRoles = keycloak.tokenParsed?.realm_access?.roles ?? []
+      setRoles(realmRoles)
     }
 
     keycloak.onAuthSuccess = () => syncAuthState(true)
@@ -100,6 +104,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = useMemo<AuthContextValue>(() => {
     const keycloak = getKeycloak()
     const resourceClientId = import.meta.env.VITE_KEYCLOAK_RESOURCE_CLIENT_ID
+    const isAdmin = isBypassed || roles.includes('admin')
     return {
       isConfigured,
       isBypassed,
@@ -107,6 +112,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated,
       token,
       username,
+      roles,
+      isAdmin,
       error,
       login: async () => {
         if (!keycloak) {
@@ -127,8 +134,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       },
       hasRealmRole: (role: string) => keycloak?.hasRealmRole(role) ?? false,
       hasResourceRole: (role: string) => resourceClientId ? keycloak?.hasResourceRole(role, resourceClientId) ?? false : false,
+      hasRole: (role: string) => isBypassed || roles.includes(role),
     }
-  }, [isConfigured, isBypassed, isReady, isAuthenticated, token, username])
+  }, [isConfigured, isBypassed, isReady, isAuthenticated, token, username, roles])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -17,7 +17,8 @@ import { navigationItems } from "@/core/layout/navigation"
 
 export function AppSidebar() {
   const groups = ['工作區', '平台管理'] as const
-  const { isConfigured, isBypassed, isAuthenticated, username, logout } = useAuth()
+  const { isConfigured, isBypassed, isAuthenticated, username, logout, isAdmin } = useAuth()
+  const visibleItems = navigationItems.filter(item => !item.adminOnly || isAdmin)
 
   return (
     <Sidebar>
@@ -27,26 +28,31 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {groups.map((group) => (
-          <SidebarGroup key={group}>
-            <SidebarGroupLabel>{group}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {navigationItems.filter((item) => item.group === group).map((item) => (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      render={
-                        <NavLink to={item.path} end={item.path === '/'} />
-                      }
-                    >
-                      {item.label}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {groups.map((group) => {
+          const groupItems = visibleItems.filter((item) => item.group === group)
+          // 👈 若群組內沒有任何項目，就不顯示該群組
+          if (groupItems.length === 0) return null
+          return (
+            <SidebarGroup key={group}>
+              <SidebarGroupLabel>{group}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {groupItems.map((item) => (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        render={
+                          <NavLink to={item.path} end={item.path === '/'} />
+                        }
+                      >
+                        {item.label}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )
+        })}
       </SidebarContent>
       <SidebarFooter>
         <div className="flex flex-col gap-3 p-4 border-t border-border">
