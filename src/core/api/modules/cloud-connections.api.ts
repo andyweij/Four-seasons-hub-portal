@@ -7,7 +7,7 @@ import type {
   UpdateCloudConnectionRequest,
 } from '../../../types'
 
-const cloudConnectionsReq = createApiGroup('/v1/admin/llm-connections')
+const cloudConnectionsReq = createApiGroup('/v1/cloud-mgt')
 
 export const cloudConnectionsApi = {
   list: async () => {

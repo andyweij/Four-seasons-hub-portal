@@ -6,8 +6,9 @@ import {
   useReactTable,
   getPaginationRowModel,
 } from "@tanstack/react-table"
-import { MoreHorizontal, Download, Trash2, Play, Square, Settings } from "lucide-react"
+import { MoreHorizontal, Download, Trash2, Play, Square } from "lucide-react"
 import { ModelStatusIndicator } from '@/features/models/components/ModelStatusIndicator'
+import { ModelCapabilities } from '@/features/models/components/ModelCapabilities'
 
 import {
   Table,
@@ -17,19 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from "./table"
-import { Badge } from "./badge"
-import { Button } from "./button"
 // 引入您之前下載的 DropdownMenu 元件
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { modelsApi, type ModelRecord } from "../../core/api"
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 interface DataTableProps {
   data: ModelRecord[]
@@ -58,6 +55,23 @@ const columns: ColumnDef<ModelRecord>[] = [
         return <span>無限制</span>
       else
         return <span>{maxModelLen} tokens</span>
+    },
+  },
+  {
+    id: "capabilities",
+    header: "能力",
+    cell: ({ row }) => {
+      const model = row.original
+      const capabilities: string[] = []
+
+      if (model.isChatModel) capabilities.push("聊天")
+      if ((model.maxImages ?? model.imagesSupport ?? 0) > 0) capabilities.push("圖片")
+      if (model.supportsReasoning ?? model.reasoning ?? false) capabilities.push("思考")
+      if (model.supportsReasoningEffort ?? model.reasoningEffort ?? false) {
+        capabilities.push("思考強度")
+      }
+
+      return <ModelCapabilities capabilities={capabilities} />
     },
   },
   // 在 columns 定義中修改「健康狀態」這一欄：

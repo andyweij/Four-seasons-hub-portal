@@ -46,7 +46,29 @@ export function ModelsPage() {
     setCloudLoading(true)
     setCloudError(null)
     try {
-      setCloudConnections(await cloudConnectionsApi.list())
+      // const data = await cloudConnectionsApi.list()
+      const mockCloudConnections: CloudConnectionSummary[] = [
+        {
+          id: "conn_01j8f4k9a1b2c3d4e5f6g7h8",
+          name: "Production OpenAI Gateway",
+          provider: "openai_compatible", // 必須是 'gemini' 或 'openai_compatible'
+          modelName: "gpt-4o",
+          enabled: true,
+          status: "available", // 必須是 'available' | 'untested' | ...
+          credentialConfigured: true,
+          apiKeyHint: "sk-...9x2A",
+          capabilities: {
+            streaming: true,
+            toolCalling: true,
+            vision: true,
+            reasoning: false,
+          },
+          lastTestedAt: "2026-09-23T09:30:00.000Z",
+          lastLatencyMs: 245,
+        },
+      ];
+      // console.log(data)
+      setCloudConnections(mockCloudConnections);
     } catch (error) {
       console.warn('獲取雲端模型失敗:', error)
       setCloudError(error instanceof Error ? error.message : '無法取得雲端模型')

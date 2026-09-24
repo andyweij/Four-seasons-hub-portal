@@ -1,12 +1,21 @@
 export interface ModelRecord {
   modelName: string
-  modelPath: string
-  url: string
-  description: string
-  reasoning: boolean
-  reasoningEffort: boolean
-  imagesSupport: number
+  modelType?: string
+  size?: number
+  maxImages: number
   maxModelLen: number
+  isChatModel: boolean
+  supportsReasoning: boolean
+  supportsReasoningEffort: boolean
+  description?: string
+  modelPath?: string
+  url?: string
+  /** 舊版模型目錄欄位，保留於前端過渡期間。 */
+  imagesSupport?: number
+  /** 舊版模型目錄欄位，保留於前端過渡期間。 */
+  reasoning?: boolean
+  /** 舊版模型目錄欄位，保留於前端過渡期間。 */
+  reasoningEffort?: boolean
   version?: string
   downloadStatus?: string
   status?: string

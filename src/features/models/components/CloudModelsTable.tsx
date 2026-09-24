@@ -16,6 +16,7 @@ import type {
   CloudConnectionSummary,
   CloudProvider,
 } from '@/types'
+import { ModelCapabilities } from './ModelCapabilities'
 
 interface CloudModelsTableProps {
   data: CloudConnectionSummary[]
@@ -64,7 +65,7 @@ function formatLastTested(connection: CloudConnectionSummary) {
 
 function capabilityLabels(connection: CloudConnectionSummary) {
   const labels: string[] = []
-  if (connection.capabilities.streaming) labels.push('串流')
+  if (connection.capabilities.streaming) labels.push('聊天')
   if (connection.capabilities.vision) labels.push('圖片')
   if (connection.capabilities.toolCalling) labels.push('Agent')
   if (connection.capabilities.reasoning) labels.push('推理')
@@ -141,13 +142,11 @@ export function CloudModelsTable({ data, onRefresh }: CloudModelsTableProps) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1.5">
-                        {capabilities.length > 0 ? capabilities.map((capability) => (
-                          <Badge key={capability} variant="outline">{capability}</Badge>
-                        )) : (
-                          <span className="text-sm text-muted-foreground">待測試</span>
-                        )}
-                      </div>
+                      {capabilities.length > 0 ? (
+                        <ModelCapabilities capabilities={capabilities} />
+                      ) : (
+                        <span className="text-sm text-muted-foreground">待測試</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatLastTested(connection)}
