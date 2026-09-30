@@ -65,10 +65,10 @@ function formatLastTested(connection: CloudConnectionSummary) {
 
 function capabilityLabels(connection: CloudConnectionSummary) {
   const labels: string[] = []
-  if (connection.capabilities.streaming) labels.push('聊天')
-  if (connection.capabilities.vision) labels.push('圖片')
-  if (connection.capabilities.toolCalling) labels.push('Agent')
-  if (connection.capabilities.reasoning) labels.push('推理')
+  if (connection.capabilities?.streaming) labels.push('聊天')
+  if (connection.capabilities?.vision) labels.push('圖片')
+  if (connection.capabilities?.toolCalling) labels.push('Agent')
+  if (connection.capabilities?.reasoning) labels.push('推理')
   return labels
 }
 

@@ -5,33 +5,121 @@ import type {
   CloudConnectionTestResult,
   CreateCloudConnectionRequest,
   UpdateCloudConnectionRequest,
+  CloudProvider,
+  CloudConnectionStatus
 } from '../../../types'
 
-const cloudConnectionsReq = createApiGroup('/v1/cloud-mgt')
+const cloudConnectionsReq = createApiGroup('/v1/admin/llm-connections')
+
+export interface RawCloudConnection {
+  id: string
+  name: string
+  provider: CloudProvider
+  model_name?: string
+  modelName?: string
+  base_url?: string | null
+  baseUrl?: string | null
+  enabled?: boolean
+  status?: CloudConnectionStatus
+  credential_configured?: boolean
+  credentialConfigured?: boolean
+  api_key_hint?: string | null
+  apiKeyHint?: string | null
+  capabilities?: {
+    streaming?: boolean
+    tool_calling?: boolean
+    toolCalling?: boolean
+    vision?: boolean
+    reasoning?: boolean
+  } | null
+  last_tested_at?: string | null
+  lastTestedAt?: string | null
+  last_latency_ms?: number | null
+  lastLatencyMs?: number | null
+}
+
+export function normalizeCloudConnection(
+  raw: RawCloudConnection,
+): CloudConnectionSummary {
+  return {
+    id: raw.id,
+    name: raw.name,
+    provider: raw.provider,
+    modelName: raw.modelName ?? raw.model_name ?? '',
+    enabled: raw.enabled ?? true,
+    status: raw.status ?? 'untested',
+    credentialConfigured:
+      raw.credentialConfigured ?? raw.credential_configured ?? false,
+    apiKeyHint: raw.apiKeyHint ?? raw.api_key_hint ?? undefined,
+    capabilities: {
+      streaming: Boolean(raw.capabilities?.streaming),
+      toolCalling: Boolean(
+        raw.capabilities?.toolCalling ?? raw.capabilities?.tool_calling,
+      ),
+      vision: Boolean(raw.capabilities?.vision),
+      reasoning: Boolean(raw.capabilities?.reasoning),
+    },
+    lastTestedAt: raw.lastTestedAt ?? raw.last_tested_at ?? undefined,
+    lastLatencyMs: raw.lastLatencyMs ?? raw.last_latency_ms ?? undefined,
+  }
+}
 
 export const cloudConnectionsApi = {
-  list: async () => {
+  list: async (): Promise<CloudConnectionSummary[]> => {
     const response = await cloudConnectionsReq.get<
-      CloudConnectionSummary[] | { connections: CloudConnectionSummary[] }
+      RawCloudConnection[] | { connections: RawCloudConnection[] }
     >('')
 
-    return Array.isArray(response) ? response : response.connections ?? []
+    const list = Array.isArray(response) ? response : response.connections ?? []
+    return list.map(normalizeCloudConnection)
   },
 
-  get: (id: string) =>
-    cloudConnectionsReq.get<CloudConnectionAdminDetail>(`/${id}`),
+  get: async (id: string): Promise<CloudConnectionAdminDetail> => {
+    const raw = await cloudConnectionsReq.get<RawCloudConnection>(`/${id}`)
+    return {
+      ...normalizeCloudConnection(raw),
+      baseUrl: raw.baseUrl ?? raw.base_url ?? null,
+    }
+  },
 
-  create: (data: CreateCloudConnectionRequest) =>
-    cloudConnectionsReq.post<
-      CloudConnectionAdminDetail,
-      CreateCloudConnectionRequest
-    >('', data),
+  create: async (
+    data: CreateCloudConnectionRequest,
+  ): Promise<CloudConnectionAdminDetail> => {
+    const payload = {
+      ...data,
+      model_name: data.modelName,
+      api_key: data.apiKey,
+      base_url: data.baseUrl,
+    }
+    const raw = await cloudConnectionsReq.post<
+      RawCloudConnection,
+      typeof payload
+    >('', payload)
+    return {
+      ...normalizeCloudConnection(raw),
+      baseUrl: raw.baseUrl ?? raw.base_url ?? null,
+    }
+  },
 
-  update: (id: string, data: UpdateCloudConnectionRequest) =>
-    cloudConnectionsReq.patch<
-      CloudConnectionAdminDetail,
-      UpdateCloudConnectionRequest
-    >(`/${id}`, data),
+  update: async (
+    id: string,
+    data: UpdateCloudConnectionRequest,
+  ): Promise<CloudConnectionAdminDetail> => {
+    const payload = {
+      ...data,
+      ...(data.modelName ? { model_name: data.modelName } : {}),
+      ...(data.apiKey ? { api_key: data.apiKey } : {}),
+      ...(data.baseUrl !== undefined ? { base_url: data.baseUrl } : {}),
+    }
+    const raw = await cloudConnectionsReq.patch<
+      RawCloudConnection,
+      typeof payload
+    >(`/${id}`, payload)
+    return {
+      ...normalizeCloudConnection(raw),
+      baseUrl: raw.baseUrl ?? raw.base_url ?? null,
+    }
+  },
 
   test: (id: string) =>
     cloudConnectionsReq.post<CloudConnectionTestResult>(`/${id}/test`),
