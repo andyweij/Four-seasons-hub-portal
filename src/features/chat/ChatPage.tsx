@@ -181,8 +181,9 @@ export function ChatPage() {
         <button type="button" className="secondary-button" disabled={streaming}
           onClick={() => { setSessionId(null); setMessages([]); setError(''); setProgress('') }}>＋ 建立新對話</button>
         {!sessions.length && <p>尚無對話紀錄</p>}
-        {sessions.map(session => <button key={session.conversationId} className="chat-session" type="button" disabled={streaming}
-          onClick={() => selectSession(session)} style={{ display: 'block', width: '100%', padding: 10, textAlign: 'left' }}>
+        {sessions.map(session => <button key={session.conversationId} className={sessionId === session.conversationId ? 'chat-session is-active' : 'chat-session'}
+          aria-current={sessionId === session.conversationId ? 'true' : undefined} type="button" disabled={streaming}
+          onClick={() => selectSession(session)}>
           <span>{session.title || '新對話'}</span><small>{sessionModelName(session)}</small>
         </button>)}
       </aside>
@@ -208,25 +209,38 @@ export function ChatPage() {
         {agentUnavailable && <p className="chat-status" role="status">此 Agent 已停用。請至 Agent 管理允許新任務，或建立新對話改選 Agent。</p>}
         {modelUnavailable && <p className="chat-status" role="status">目前模型未啟用或已移除。請啟用模型或建立新對話改選模型。</p>}
         {progress && <p className="chat-status" role="status">{progress}</p>}
-        <div className="chat-messages-container" style={{ padding: 20, minHeight: 300, overflowY: 'auto' }}>
-          {!messages.length && <p>輸入訊息開始對話。</p>}
-          {messages.map((message, index) => <div key={index} style={{ marginBottom: 20 }}>
-            <strong>{message.role === 'user' ? username || 'You' : 'Assistant'}</strong>
-            {message.content.filter(part => part.type === 'thinking').map((part, i) =>
-              <details key={i}><summary>思考過程</summary><p style={{ whiteSpace: 'pre-wrap' }}>{part.text}</p></details>)}
-            {message.content.filter(part => part.type === 'text').map((part, i) =>
-              <p key={i} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{part.text}</p>)}
-            {!!message.sources?.length && <details><summary>搜尋來源（{message.sources.length}）</summary>
-              <ol>{message.sources.filter(source => /^https?:\/\//i.test(source.url)).map(source =>
-                <li key={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title || source.url}</a></li>)}</ol>
-            </details>}
-            {message.status === 'cancelled' && <small>已取消，保留部分回答</small>}
-            {message.status === 'error' && <small>未完成，保留已接收內容</small>}
-          </div>)}
+        <div className="chat-messages-container" aria-label="對話訊息">
+          {!messages.length && <div className="empty-state chat-empty">
+            <strong>開始一段對話</strong><p>選擇模型與 Agent，輸入問題開始對話。</p>
+          </div>}
+          {messages.map((message, index) => {
+            const isUser = message.role === 'user'
+            const thinking = message.content.filter(part => part.type === 'thinking').map(part => part.text).join('')
+            const text = message.content.filter(part => part.type === 'text').map(part => part.text).join('')
+            return <div key={index} className={isUser ? 'chat-message chat-message-user' : 'chat-message chat-message-assistant'}>
+              <div className="chat-message-author">{isUser ? username || 'You' : 'Assistant'}</div>
+              <div className="chat-bubble">
+                {!!thinking && <details className="chat-thinking" open={message.status === 'running' && !text}>
+                  <summary>思考過程{message.status === 'running' && !text ? '（思考中…）' : ''}</summary>
+                  <div className="chat-message-text">{thinking}</div>
+                </details>}
+                {text ? <div className="chat-message-text">{text}</div>
+                  : !thinking && <p className="chat-message-placeholder">
+                    {message.status === 'running' ? '正在生成回覆…' : '（無回覆內容）'}</p>}
+                {!!message.sources?.length && <details className="chat-sources">
+                  <summary>搜尋來源（{message.sources.length}）</summary>
+                  <ol>{message.sources.filter(source => /^https?:\/\//i.test(source.url)).map(source =>
+                    <li key={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title || source.url}</a></li>)}</ol>
+                </details>}
+                {message.status === 'cancelled' && <p className="chat-message-status">已取消，保留部分回答</p>}
+                {message.status === 'error' && <p className="chat-message-status">未完成，保留已接收內容</p>}
+              </div>
+            </div>
+          })}
         </div>
         <form className="chat-composer" onSubmit={submit}>
           <input value={input} onChange={event => setInput(event.target.value)} disabled={streaming} placeholder="請輸入訊息…" />
-          {streaming ? <button type="button" onClick={stop} disabled={cancelling}>{cancelling ? '取消中…' : '停止'}</button>
+          {streaming ? <button type="button" className="secondary-button" onClick={stop} disabled={cancelling}>{cancelling ? '取消中…' : '停止'}</button>
             : <button type="submit" className="primary-button" disabled={!input.trim() || modelUnavailable || agentUnavailable}>送出</button>}
         </form>
       </article>
