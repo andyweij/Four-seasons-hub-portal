@@ -722,3 +722,18 @@ a {
     @apply font-sans;
   }
 }
+
+/* Long identifiers, source URLs and messages stay inside their panels. */
+.content, .chat-workspace, .chat-panel, .chat-main { min-width: 0; max-width: 100%; }
+.chat-main { display: flex; flex-direction: column; }
+.chat-config { flex-wrap: wrap; align-items: center; }
+.chat-config label { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.chat-config select { min-width: 0; max-width: min(320px, 100%); }
+.chat-session { min-width: 0; overflow-wrap: anywhere; border-radius: 7px; }
+.chat-session span, .chat-session small { display: block; }
+.chat-session small { margin-top: 4px; color: var(--muted-foreground); font-size: .75rem; }
+.chat-messages-container { flex: 1; min-width: 0; max-width: 100%; max-height: 65vh; overflow-wrap: anywhere; }
+.chat-messages-container details, .chat-messages-container p, .chat-messages-container li { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.chat-composer { min-width: 0; }
+.chat-composer button { flex-shrink: 0; }
+.chat-status { padding: 8px 18px; margin: 0; overflow-wrap: anywhere; color: var(--muted-foreground); }

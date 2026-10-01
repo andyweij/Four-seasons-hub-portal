@@ -1,3 +1,4 @@
+import { notifyCatalogChanged } from '../catalog-sync'
 import { createApiGroup } from '../client'
 import type {
   CloudConnectionAdminDetail,
@@ -86,7 +87,8 @@ export const cloudConnectionsApi = {
     data: CreateCloudConnectionRequest,
   ): Promise<CloudConnectionAdminDetail> => {
     const payload = {
-      ...data,
+      name: data.name,
+      provider: data.provider,
       model_name: data.modelName,
       api_key: data.apiKey,
       base_url: data.baseUrl,
@@ -95,6 +97,7 @@ export const cloudConnectionsApi = {
       RawCloudConnection,
       typeof payload
     >('', payload)
+    notifyCatalogChanged()
     return {
       ...normalizeCloudConnection(raw),
       baseUrl: raw.baseUrl ?? raw.base_url ?? null,
@@ -106,7 +109,8 @@ export const cloudConnectionsApi = {
     data: UpdateCloudConnectionRequest,
   ): Promise<CloudConnectionAdminDetail> => {
     const payload = {
-      ...data,
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
       ...(data.modelName ? { model_name: data.modelName } : {}),
       ...(data.apiKey ? { api_key: data.apiKey } : {}),
       ...(data.baseUrl !== undefined ? { base_url: data.baseUrl } : {}),
@@ -115,6 +119,7 @@ export const cloudConnectionsApi = {
       RawCloudConnection,
       typeof payload
     >(`/${id}`, payload)
+    notifyCatalogChanged()
     return {
       ...normalizeCloudConnection(raw),
       baseUrl: raw.baseUrl ?? raw.base_url ?? null,
@@ -124,6 +129,8 @@ export const cloudConnectionsApi = {
   test: (id: string) =>
     cloudConnectionsReq.post<CloudConnectionTestResult>(`/${id}/test`),
 
-  remove: (id: string) =>
-    cloudConnectionsReq.delete(`/${id}`),
+  remove: async (id: string) => {
+    await cloudConnectionsReq.delete("/" + encodeURIComponent(id))
+    notifyCatalogChanged()
+  },
 }

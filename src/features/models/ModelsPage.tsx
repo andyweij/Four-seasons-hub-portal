@@ -26,6 +26,7 @@ export function ModelsPage() {
   const [cloudLoaded, setCloudLoaded] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
   const [cloudError, setCloudError] = useState<string | null>(null)
+  const [editingConnection, setEditingConnection] = useState<CloudConnectionSummary | null>(null)
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
 
   const fetchLocalModels = useCallback(async () => {
@@ -93,7 +94,7 @@ export function ModelsPage() {
           variant="default"
           size="lg"
           className="w-full sm:w-auto"
-          onClick={() => setCreateSheetOpen(true)}
+          onClick={() => { setEditingConnection(null); setCreateSheetOpen(true) }}
         >
           <CloudCog />
           新增雲端模型
@@ -138,6 +139,7 @@ export function ModelsPage() {
             <CloudModelsTable
               data={cloudConnections}
               onRefresh={fetchCloudConnections}
+              onEdit={connection => { setEditingConnection(connection); setCreateSheetOpen(true) }}
             />
           )
         )}
@@ -145,6 +147,7 @@ export function ModelsPage() {
 
       <CloudConnectionSheet
         open={createSheetOpen}
+        connection={editingConnection}
         onOpenChange={setCreateSheetOpen}
         onCreated={handleCreated}
       />

@@ -1,3 +1,4 @@
+import { notifyCatalogChanged } from '../catalog-sync'
 import { createApiGroup } from '../client'
 import type { ModelRecord } from '../../../types'
 import type { CreateModelRequest } from '../../../dto/models.request'
@@ -15,6 +16,10 @@ export const modelsApi = {
   updateModel: (id: string, data: Partial<ModelRecord>) => modelsReq.put<ModelRecord>(`/${id}`, data),
   /** 停用模型 (對應 /v1/modelsMgt/{id}) */
   deleteModel: (id: string) => modelsReq.delete(`/disable-model/${id}`),
+  removeRegistration: async (id: string) => {
+    await modelsReq.delete("/registration/" + encodeURIComponent(id))
+    notifyCatalogChanged()
+  },
   /** 測試模型連線與健康狀態 (對應 /v1/modelsMgt/{id}/health) */
   checkHealth: (id: string) => modelsReq.get<{ status: string; latency?: number }>(`/${id}/health`),
 }

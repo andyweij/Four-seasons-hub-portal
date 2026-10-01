@@ -11,10 +11,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { cloudConnectionsApi } from '@/core/api'
-import type { CloudProvider, CreateCloudConnectionRequest } from '@/types'
+import type { CloudProvider, CreateCloudConnectionRequest, CloudConnectionSummary } from '@/types'
 
 interface CloudConnectionSheetProps {
   open: boolean
+  connection?: CloudConnectionSummary | null
   onOpenChange: (open: boolean) => void
   onCreated: () => Promise<void> | void
 }
@@ -29,19 +30,31 @@ const initialForm: CreateCloudConnectionRequest = {
 
 export function CloudConnectionSheet({
   open,
+  connection,
   onOpenChange,
   onCreated,
 }: CloudConnectionSheetProps) {
   const [form, setForm] = useState<CreateCloudConnectionRequest>(initialForm)
+  const [fetching, setFetching] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (open) {
-      setForm(initialForm)
-      setError(null)
-    }
-  }, [open])
+    if (!open) return
+    let live = true
+    setError(null)
+    setForm(connection ? {
+      name: connection.name, provider: connection.provider, modelName: connection.modelName,
+      apiKey: '', baseUrl: '',
+    } : initialForm)
+    setFetching(!!connection)
+    if (connection) cloudConnectionsApi.get(connection.id).then(detail => {
+      if (live) setForm(current => ({ ...current, baseUrl: detail.baseUrl || '' }))
+    }).catch(cause => {
+      if (live) setError(cause instanceof Error ? cause.message : '載入連線設定失敗')
+    }).finally(() => { if (live) setFetching(false) })
+    return () => { live = false }
+  }, [open, connection])
 
   const updateField = <K extends keyof CreateCloudConnectionRequest>(
     field: K,
@@ -67,8 +80,8 @@ export function CloudConnectionSheet({
     const apiKey = form.apiKey.trim()
     const baseUrl = form.baseUrl?.trim()
 
-    if (!name || !modelName || !apiKey) {
-      setError('請完整填寫顯示名稱、模型名稱與 API Key。')
+    if (!name || !modelName || (!connection && !apiKey)) {
+      setError(connection ? '請填寫顯示名稱與模型名稱。' : '請完整填寫顯示名稱、模型名稱與 API Key。')
       return
     }
 
@@ -79,15 +92,17 @@ export function CloudConnectionSheet({
 
     setSubmitting(true)
     try {
-      await cloudConnectionsApi.create({
-        name,
-        provider: form.provider,
-        modelName,
-        apiKey,
-        ...(form.provider === 'openai_compatible' && baseUrl
-          ? { baseUrl }
-          : {}),
-      })
+      if (connection) {
+        await cloudConnectionsApi.update(connection.id, {
+          name, modelName, ...(apiKey ? { apiKey } : {}),
+          ...(form.provider === 'openai_compatible' ? { baseUrl } : {}),
+        })
+      } else {
+        await cloudConnectionsApi.create({
+          name, provider: form.provider, modelName, apiKey,
+          ...(form.provider === 'openai_compatible' && baseUrl ? { baseUrl } : {}),
+        })
+      }
       await onCreated()
       onOpenChange(false)
     } catch (cause) {
@@ -101,14 +116,14 @@ export function CloudConnectionSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg">
         <SheetHeader className="border-b px-6 py-5">
-          <SheetTitle className="text-lg">新增雲端模型</SheetTitle>
+          <SheetTitle className="text-lg">{connection ? '編輯雲端模型' : '新增雲端模型'}</SheetTitle>
           <SheetDescription>
-            建立由平台管理的 Gemini 或 OpenAI-compatible 連線。API Key 儲存後不會再次顯示。
+            {connection ? '修改模型名稱或更新 API Key；金鑰留空會保留原設定。' : '建立 Gemini 或 OpenAI-compatible 連線。API Key 儲存後不會再次顯示。'}
           </SheetDescription>
         </SheetHeader>
 
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <fieldset disabled={fetching || submitting} className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium text-foreground">Provider</legend>
               <div className="grid grid-cols-2 gap-2">
@@ -119,6 +134,7 @@ export function CloudConnectionSheet({
                   <button
                     key={value}
                     type="button"
+                    disabled={!!connection}
                     aria-pressed={form.provider === value}
                     className={form.provider === value
                       ? 'rounded-lg border border-primary bg-primary/10 px-3 py-2.5 text-sm font-medium text-primary'
@@ -141,6 +157,7 @@ export function CloudConnectionSheet({
               />
             </label>
 
+            {form.provider === 'gemini' && <p className="text-xs text-muted-foreground">Gemini 使用官方預設 Endpoint，不需要另外填寫。</p>}
             {form.provider === 'openai_compatible' && (
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">Endpoint</span>
@@ -174,7 +191,7 @@ export function CloudConnectionSheet({
                 type="password"
                 value={form.apiKey}
                 autoComplete="new-password"
-                placeholder="輸入供應商 API Key"
+                placeholder={connection ? '留空保留原金鑰；輸入以更新' : '輸入供應商 API Key'}
                 onChange={(event) => updateField('apiKey', event.target.value)}
               />
               <span className="block text-xs leading-5 text-muted-foreground">
@@ -187,7 +204,7 @@ export function CloudConnectionSheet({
                 {error}
               </div>
             )}
-          </div>
+          </fieldset>
 
           <SheetFooter className="flex-row justify-end border-t px-6 py-4">
             <Button
@@ -198,9 +215,9 @@ export function CloudConnectionSheet({
             >
               取消
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || fetching}>
               {submitting && <Loader2 className="animate-spin" />}
-              {submitting ? '建立中' : '建立連線'}
+              {fetching ? '載入中' : submitting ? '儲存中' : connection ? '儲存修改' : '建立連線'}
             </Button>
           </SheetFooter>
         </form>

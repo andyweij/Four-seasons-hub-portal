@@ -64,8 +64,9 @@ async function request<T>(endpoint: string, options: ApiRequestOptions = {}): Pr
     let errorMessage = `API Request failed with status ${response.status}`
     try {
       const errorData = await response.json()
-      if (errorData && (errorData.message || errorData.error)) {
-        errorMessage = errorData.message || errorData.error
+      if (errorData) {
+        const detail = errorData.detail || errorData.message || errorData.error
+        if (typeof detail === "string") errorMessage = detail
       }
     } catch {
       // 忽略 JSON 解析失敗，使用預設的 HTTP status message

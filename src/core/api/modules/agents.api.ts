@@ -1,13 +1,20 @@
+import { notifyCatalogChanged } from '../catalog-sync'
 import { apiClient } from '../client'
-import type { AgentRecord } from '../../../types'
+import type { AgentRecord, AgentHealth } from '../../../types'
 
+const adminPath = (id: string) => `/v1/admin/agents/${encodeURIComponent(id)}`
+
+/** Matches the Hub catalog and lifecycle API; definitions are configured in its catalog. */
 export const agentsApi = {
-  /** 取得 Agents 列表 */
-  getAgents: () => apiClient.get<AgentRecord[]>('/agents'),
-  /** 取得單一 Agent 詳細設定 */
-  getAgent: (id: string) => apiClient.get<AgentRecord>(`/agents/${id}`),
-  /** 建立 Agent */
-  createAgent: (data: Partial<AgentRecord>) => apiClient.post<AgentRecord>('/agents', data),
-  /** 更新 Agent */
-  updateAgent: (id: string, data: Partial<AgentRecord>) => apiClient.put<AgentRecord>(`/agents/${id}`, data),
+  getAgents: () => apiClient.get<AgentRecord[]>('/v1/agents'),
+  setEnabled: async (id: string, enabled: boolean) => {
+    const result = await apiClient.patch<AgentRecord>(adminPath(id), { enabled })
+    notifyCatalogChanged(); return result
+  },
+  getHealth: (id: string) => apiClient.get<AgentHealth>(`${adminPath(id)}/health`),
+  start: (id: string) => apiClient.post<{ container_id: string }>(`${adminPath(id)}/start`),
+  stop: async (id: string) => {
+    try { return await apiClient.post<{ status: string }>(adminPath(id) + "/stop") }
+    finally { notifyCatalogChanged() }
+  },
 }

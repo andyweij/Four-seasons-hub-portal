@@ -91,16 +91,19 @@ const columns: ColumnDef<ModelRecord>[] = [
       // 觸發指令的 Mock 腳本函式
       const handleAction = async (actionType: string) => {
         try {
+          if (actionType === "delete" && !window.confirm('移除「' + model.modelName + '」的目錄登記？模型檔案與對話紀錄會保留。')) return
           setLoading(true)
           if (actionType === "start") {
             await modelsApi.createModel({ model_name: model.modelName })
           } else if (actionType === "stop") {
             await modelsApi.deleteModel(model.modelName)
+          } else if (actionType === "delete") {
+            await modelsApi.removeRegistration(model.modelName)
           }
           // 呼叫父層傳進來的 refresh，重新拉取最新狀態觸發重新渲染
           (table.options.meta as any)?.onRefresh?.()
         } catch (err) {
-          console.error(`模型操作 [${actionType}] 失敗:`, err)
+          window.alert(err instanceof Error ? err.message : "模型操作失敗")
         } finally {
           setLoading(false)
         }
@@ -133,7 +136,7 @@ const columns: ColumnDef<ModelRecord>[] = [
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleAction("delete")} className="text-destructive ...">
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>刪除模型</span>
+                      <span>移除登記</span>
                     </DropdownMenuItem>
                   </>
                 )}
@@ -146,7 +149,7 @@ const columns: ColumnDef<ModelRecord>[] = [
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleAction("delete")} className="flex items-center gap-2 cursor-pointer text-destructive focus:bg-destructive/10">
                   <Trash2 className="h-3.5 w-3.5" />
-                  <span>刪除</span>
+                  <span>移除登記</span>
                 </DropdownMenuItem>
               </>
             )}

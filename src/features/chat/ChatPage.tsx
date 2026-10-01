@@ -1,468 +1,235 @@
-import { useEffect, useState } from 'react'
-import {
-  chatApi,
-  type ChatSession,
-  type ChatMessage,
-  type CreateStreamRequest,
-  type ChatContent,
-  type StreamDeltaEvent,
-} from '@/core/api'
+import { CATALOG_CHANGED, CATALOG_REVISION } from '../../core/api/catalog-sync'
+import { useEffect, useRef, useState } from 'react'
+import { chatApi, type ChatSession, type ChatMessage, type ModelOption, type AgentOption } from '@/core/api'
 import { useAuth } from '../../core/auth/useAuth'
+import { readChatEvents } from './streaming'
+
+const modelKey = (model: { source: string; id: string }) => JSON.stringify([model.source, model.id])
 
 export function ChatPage() {
   const { username } = useAuth()
   const [sessions, setSessions] = useState<ChatSession[]>([])
-
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [inputText, setInputText] = useState<string>('') // 使用者輸入的文字
-  const [isStreaming, setIsStreaming] = useState<boolean>(false)
-  const [runningModels, setRunningModels] = useState<string[]>([])
-  // 當前選擇的模型（給予預設值防呆）
-  const [selectedModel, setSelectedModel] = useState<string>("無運行中模型")
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-
-  // 點擊切換 session
-  const handleSelectSession = async (session: ChatSession) => {
-    if (isStreaming) return
-    setCurrentSessionId(session.conversationId)
-    if (runningModels.includes(session.selectModel)) {
-      setSelectedModel(session.selectModel)
-    }
-    // 載入該對話的歷史訊息
-    setMessages([])
-    try {
-      const historyRes: any = await chatApi.getMessages(session.conversationId)
-      console.log('取得歷史訊息回應:', historyRes)
-      // 1. 防呆：相容直接回傳陣列或包裝在 messages 屬性中的結構
-      const rawList: any[] = Array.isArray(historyRes)
-        ? historyRes
-        : historyRes?.messages ?? []
-      // 2. 轉換格式，並相容 content 為純字串或物件陣列的情境
-      const formattedMessages: ChatMessage[] = rawList.map((c) => {
-        let content: ChatContent[] = []
-        if (Array.isArray(c.content)) {
-          content = c.content
-        } else if (typeof c.content === 'string') {
-          content = [{ type: 'text', text: c.content }]
-        } else if (c.text) {
-          content = [{ type: 'text', text: c.text }]
-        }
-        return {
-          role: c.role,
-          content,
-          timestamp: c.timestamp || new Date().toISOString(),
-        }
-      })
-      // 3. 一次性更新所有歷史訊息
-      setMessages(formattedMessages)
-    } catch (err) {
-      console.error("載入歷史訊息失敗:", err)
-    }
-  }
-
-  // 建立新對話（重置）
-  const handleNewChat = () => {
-    if (isStreaming) return
-    setCurrentSessionId(null)
-    setMessages([])
-  }
+  const [models, setModels] = useState<ModelOption[]>([])
+  const [agents, setAgents] = useState<AgentOption[]>([])
+  const [selectedModel, setSelectedModel] = useState('')
+  const [selectedAgent, setSelectedAgent] = useState('')
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [input, setInput] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  const [progress, setProgress] = useState('')
+  const [error, setError] = useState('')
+  const [cancelling, setCancelling] = useState(false)
+  const abort = useRef<AbortController | null>(null)
+  const runId = useRef<string | null>(null)
+  const agent = agents.find(item => item.id === selectedAgent)
+  const needsModel = !selectedAgent || !agent || agent.model_binding === 'hub_per_run'
+  const agentUnavailable = !!selectedAgent && (!agent || !agent.enabled || !agent.capabilities.task_submission)
+  const modelUnavailable = needsModel && !models.some(item => modelKey(item) === selectedModel)
 
   useEffect(() => {
     if (!username) return
-    // 1. 取得歷史對話
-    chatApi.getSessions(username)
-      .then((res) => setSessions(res))
-      .catch((err) => console.warn('無法取得對話紀錄:', err))
-    // 2. 取得目前運行中的模型
-    chatApi.getRunningModels(username)
-      .then((res: any) => {
-        console.log('運行中模型列表:', res)
-        // 相容後端回傳 ['modelA', 'modelB'] 或 { models: ['modelA'] } 或物件陣列結構
-        const rawList = Array.isArray(res) ? res : res?.models ?? []
-        const modelNames = rawList.map((item: any) =>
-          typeof item === 'string' ? item : (item.modelName || item.name || '')
-        ).filter(Boolean)
-        if (modelNames.length > 0) {
-          setRunningModels(modelNames)
-          setSelectedModel(modelNames[0]) // 自動將第一個運行中的模型設為預設
-        }
-      })
-      .catch((err) => {
-        console.warn('無法取得運行中模型清單，使用預設值:', err)
-      })
+    let live = true
+    Promise.all([chatApi.getSessions(), chatApi.getModelOptions(), chatApi.getAgents()])
+      .then(([history, choices, agentChoices]) => {
+        if (!live) return
+        setSessions(history); setModels(choices); setAgents(agentChoices)
+        setSelectedModel(choices[0] ? modelKey(choices[0]) : '')
+      }).catch(err => live && setError(String(err)))
+    return () => { live = false; abort.current?.abort() }
   }, [username])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputText.trim() || !username || isStreaming) return
-
-    const userContent: ChatContent = {
-      type: 'text',
-      text: inputText,
+  useEffect(() => {
+    if (!username) return
+    let live = true
+    const refresh = () => {
+      Promise.all([chatApi.getModelOptions(), chatApi.getAgents()]).then(([choices, agentChoices]) => {
+        if (!live) return
+        setModels(choices); setAgents(agentChoices)
+        setSelectedModel(previous => previous || (choices[0] ? modelKey(choices[0]) : ''))
+      }).catch(cause => live && setError(String(cause)))
     }
-
-    // 1. 組裝使用者發送的最新訊息
-    const userMsg: ChatMessage = {
-      role: 'user',
-      content: [userContent],
-      timestamp: new Date().toISOString(),
+    const storage = (event: StorageEvent) => { if (event.key === CATALOG_REVISION) refresh() }
+    window.addEventListener(CATALOG_CHANGED, refresh)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', storage)
+    return () => {
+      live = false
+      window.removeEventListener(CATALOG_CHANGED, refresh)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', storage)
     }
+  }, [username])
 
-    // 2. 建立一筆空的 assistant 訊息佔位，供串流逐字追加
-    const assistantMsg: ChatMessage = {
-      role: 'assistant',
-      content: [{ type: 'text', text: '' }],
-      timestamp: new Date().toISOString(),
-    }
-
-    const updatedMessages = [...messages, userMsg]
-    setMessages([...updatedMessages, assistantMsg])
-    setInputText('')
-    setIsStreaming(true)
-
-    // 3. 組裝後端所需的 Request Body (CreateStreamRequest)
-    const payload: CreateStreamRequest = {
-      model: selectedModel,
-      messages: [userMsg],
-      stream: true,
-      conversationId: "",
-    }
-
+  async function refreshOptions() {
     try {
-      // 4. 呼叫 createStream API
-      const response = await chatApi.createStream(payload)
-      if (!response.body) {
-        throw new Error('ReadableStream not supported in response')
-      }
+      const [choices, agentChoices] = await Promise.all([chatApi.getModelOptions(), chatApi.getAgents()])
+      setModels(choices); setAgents(agentChoices); setError('')
+    } catch (cause) { setError(String(cause)) }
+  }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+  function sessionModelName(session: ChatSession) {
+    const ref = session.model_ref || (session.selectModel.startsWith('cloud:')
+      ? { source: 'cloud', id: session.selectModel.slice(6) } : { source: 'local', id: session.selectModel })
+    const model = models.find(item => item.source === ref.source && item.id === ref.id)
+    return model ? (ref.source === 'cloud' ? '雲端 · ' : '本地 · ') + model.name
+      : ref.source === 'cloud' ? '雲端模型（未啟用或已移除）' : ref.id
+  }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+  async function selectSession(session: ChatSession) {
+    if (streaming) return
+    setError('')
+    try {
+      const history = await chatApi.getMessages(session.conversationId)
+      setMessages(history.map(message => ({
+        ...message, content: [{ type: 'text', text: message.content }],
+        timestamp: new Date().toISOString(),
+      })))
+      setSessionId(session.conversationId); setSelectedAgent(session.agent_id || '')
+      setSelectedModel(modelKey(session.model_ref || (session.selectModel.startsWith('cloud:')
+        ? { source: 'cloud', id: session.selectModel.slice(6) } : { source: 'local', id: session.selectModel })))
+    } catch (err) { setError(String(err)) }
+  }
 
-        buffer += decoder.decode(value, { stream: true })
+  function updateAssistant(update: (message: ChatMessage) => ChatMessage) {
+    setMessages(previous => previous.map((message, index) =>
+      index === previous.length - 1 && message.role === 'assistant' ? update(message) : message))
+  }
 
-        // 支援 Windows / Java 預設之 \r\n (CRLF) 及 \n (LF) 換行格式
-        const lines = buffer.split(/\r?\n/)
-        buffer = lines.pop() ?? '' // 尚未結束的一行保留到下一個 chunk
+  function append(type: string, text: string) {
+    updateAssistant(message => {
+      const content = message.content.map(part => ({ ...part }))
+      const existing = content.find(part => part.type === type)
+      if (existing) existing.text += text
+      else content.push({ type, text })
+      return { ...message, content }
+    })
+  }
 
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data:')) continue
-
-          const jsonStr = trimmed.replace(/^data:\s*/, '')
-          if (!jsonStr || jsonStr === '[DONE]') continue
-
-          try {
-            const event: StreamDeltaEvent = JSON.parse(jsonStr)
-
-            // 依 event.type 更新畫面
-            if (event.type === 'thinking_delta' && event.content) {
-              setMessages((prev) => {
-                const next = [...prev]
-                const last = next[next.length - 1]
-                if (last && last.role === 'assistant') {
-                  const updatedContent = last.content.map((c) => ({ ...c }))
-                  let thinkingBlock = updatedContent.find((c) => c.type === 'thinking')
-                  if (!thinkingBlock) {
-                    thinkingBlock = { type: 'thinking', text: '' }
-                    updatedContent.unshift(thinkingBlock)
-                  }
-                  thinkingBlock.text += event.content
-                  next[next.length - 1] = { ...last, content: updatedContent }
-                }
-                return next
-              })
-            } else if (event.type === 'delta' && event.content) {
-              setMessages((prev) => {
-                const next = [...prev]
-                const last = next[next.length - 1]
-                if (last && last.role === 'assistant') {
-                  const updatedContent = last.content.map((c) => ({ ...c }))
-                  let textBlock = updatedContent.find((c) => c.type === 'text')
-                  if (!textBlock) {
-                    textBlock = { type: 'text', text: '' }
-                    updatedContent.push(textBlock)
-                  }
-                  textBlock.text += event.content
-                  next[next.length - 1] = { ...last, content: updatedContent }
-                }
-                return next
-              })
-            } else if (event.type === 'ack') {
-              const conversationId = event.conversation_id
-              if (conversationId !== undefined) {
-                setCurrentSessionId(conversationId)
-              }
-              console.log('SSE Ack Received:', conversationId)
-            } else if (event.type === 'done') {
-              const createSession: ChatSession = {
-                conversationId: currentSessionId || "",
-                title: userMsg.content[0].text,
-                selectModel: selectedModel,
-                lastModifyDttm: new Date().toISOString(),
-              }
-              setSessions((prev) => {
-                const next = [...prev, createSession]
-                return next
-              })
-              console.log('SSE Stream Done:', event.usage)
-            }
-          } catch (parseErr) {
-            console.warn('解析 SSE 訊息失敗:', jsonStr, parseErr)
-          }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    if (streaming || !input.trim()) return
+    if (agentUnavailable) { setError('此 Agent 已停用或不接受新任務，請至 Agent 管理啟用或建立新對話。'); return }
+    const model = models.find(item => modelKey(item) === selectedModel)
+    if (needsModel && !model) { setError('請選擇可用模型'); return }
+    const text = input.trim()
+    setMessages(previous => [...previous,
+      { role: 'user', content: [{ type: 'text', text }], timestamp: new Date().toISOString() },
+      { role: 'assistant', content: [], timestamp: new Date().toISOString(), status: 'running' },
+    ])
+    setInput(''); setStreaming(true); setError(''); setProgress('')
+    runId.current = null
+    abort.current = new AbortController()
+    let terminal = false
+    try {
+      const response = await chatApi.createStream({
+        conversationId: sessionId || '',
+        ...(needsModel && model ? { modelRef: { source: model.source, id: model.id } } : {}),
+        ...(selectedAgent ? { agentId: selectedAgent } : {}),
+        messages: [{ role: 'user', content: [{ type: 'text', text }] }], stream: true,
+      }, abort.current.signal)
+      if (!response.body) throw new Error('瀏覽器不支援串流')
+      for await (const item of readChatEvents(response.body)) {
+        if (item.type === 'ack') {
+          if (item.conversation_id) setSessionId(item.conversation_id)
+          runId.current = item.run_id || null
+          updateAssistant(message => ({ ...message, run_id: item.run_id }))
+        } else if (item.type === 'delta' && item.content) append('text', item.content)
+        else if (item.type === 'thinking_delta' && item.content) append('thinking', item.content)
+        else if (item.type === 'agent_progress') setProgress(item.content || '')
+        else if (item.type === 'sources') updateAssistant(message => ({ ...message, sources: item.sources || [] }))
+        else if (item.type === 'done') {
+          terminal = true; updateAssistant(message => ({ ...message, status: 'complete' }))
+        } else if (item.type === 'cancelled') {
+          terminal = true; updateAssistant(message => ({ ...message, status: 'cancelled' })); setProgress('已取消')
+        } else if (item.type === 'error') {
+          terminal = true; updateAssistant(message => ({ ...message, status: 'error' }))
+          setError(item.content || '執行失敗')
         }
       }
-
-      // 若串流結束時 buffer 還有未結尾的 data: 內容
-      if (buffer.trim().startsWith('data:')) {
-        const jsonStr = buffer.trim().replace(/^data:\s*/, '')
-        if (jsonStr && jsonStr !== '[DONE]') {
-          try {
-            const event: StreamDeltaEvent = JSON.parse(jsonStr)
-            if (event.type === 'delta' && event.content) {
-              setMessages((prev) => {
-                const next = [...prev]
-                const last = next[next.length - 1]
-                if (last && last.role === 'assistant') {
-                  const updatedContent = last.content.map((c) => ({ ...c }))
-                  let textBlock = updatedContent.find((c) => c.type === 'text')
-                  if (!textBlock) {
-                    textBlock = { type: 'text', text: '' }
-                    updatedContent.push(textBlock)
-                  }
-                  textBlock.text += event.content
-                  next[next.length - 1] = { ...last, content: updatedContent }
-                }
-                return next
-              })
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
+      if (!terminal) throw new Error('串流中斷，未收到完成確認')
     } catch (err) {
-      console.error('發送失敗:', err)
-      // 若串流傳輸到一半被中斷 (例如 ERR_INCOMPLETE_CHUNKED_ENCODING)，保留已接收的內容並在末尾提示
-      setMessages((prev) => {
-        const next = [...prev]
-        const last = next[next.length - 1]
-        if (last && last.role === 'assistant') {
-          const updatedContent = last.content.map((c) => ({ ...c }))
-          let textBlock = updatedContent.find((c) => c.type === 'text')
-          if (!textBlock) {
-            textBlock = { type: 'text', text: '' }
-            updatedContent.push(textBlock)
-          }
-          textBlock.text +=
-            (textBlock.text ? '\n\n' : '') +
-            '⚠️ [串流中斷: 伺服器端提前關閉連線 (net::ERR_INCOMPLETE_CHUNKED_ENCODING)]'
-          next[next.length - 1] = { ...last, content: updatedContent }
-        }
-        return next
-      })
+      if (!(err instanceof DOMException && err.name === 'AbortError')) setError(String(err))
+      updateAssistant(message => ({ ...message, status: 'error' }))
     } finally {
-      setIsStreaming(false)
+      setStreaming(false); setCancelling(false); abort.current = null; runId.current = null
+      chatApi.getSessions().then(setSessions).catch(() => undefined)
     }
   }
 
-  return (
-    <section>
-      <header className="page-header">
-        <p className="eyebrow">CHAT WORKSPACE</p>
-        <h1>對話工作台</h1>
-        <p>選擇模型與 Agent，透過 Java Gateway 的 SSE 端點取得串流回覆。</p>
-      </header>
-      <div className="chat-workspace">
-        <aside className="chat-panel">
-          <strong>工作階段</strong>
-          {/* 啟用「建立新對話」按鈕 */}
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleNewChat}
-            disabled={isStreaming}
-            style={{ cursor: isStreaming ? 'not-allowed' : 'pointer' }}
-          >
-            ＋ 建立新對話
-          </button>
-          {sessions.length === 0 && <p className="text-muted-foreground text-sm ">尚無對話紀錄</p>}
-          <div className="flex flex-col mt-2 divide-y divide-border border-y border-border">
-            {sessions.map((session) => {
-              const isActive = currentSessionId === session.conversationId
-              return (
-                <div
-                  key={session.conversationId}
-                  onClick={() => handleSelectSession(session)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--portal-accent-bg, #c8cdd4ff)' : 'transparent',
-                    // border: isActive ? '1px solid #0d9488' : '1px solid transparent',
-                    transition: 'background-color 0.2s',
-                  }}
-                  className="hover:bg-slate-800/60"
-                >
-                  {/* 主標題：對話標題 */}
-                  <p style={{ margin: 0, fontWeight: isActive ? 600 : 400, fontSize: '0.9rem' }}>
-                    {session.title || '新對話'}
-                  </p>
-                  {/* 副資訊：模型名稱 */}
-                  <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>
-                    {session.selectModel}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </aside>
+  async function stop() {
+    setError('')
+    if (runId.current) {
+      if (!agent?.capabilities.cancellation) {
+        abort.current?.abort(); setProgress('已停止觀看；遠端工作可能仍在執行'); return
+      }
+      setCancelling(true)
+      try {
+        const result = await chatApi.cancelRun(runId.current)
+        if (result.status === 'cancel_requested') setProgress('已提出取消要求，等待停止確認')
+        else { setProgress(result.status === 'unsupported' ? '遠端不支援取消' : '工作已結束'); setCancelling(false) }
+      } catch (err) { setError(String(err)); setCancelling(false) }
+    } else abort.current?.abort()
+  }
 
-        <article className="chat-main">
-          <div className="chat-config">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>模型：</span>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={isStreaming}
-                style={{
-                  background: 'var(--portal-input-bg, #0f172a)',
-                  color: 'inherit',
-                  border: '1px solid var(--portal-input-border, #334155)',
-                  borderRadius: '6px',
-                  padding: '2px 8px',
-                  fontSize: '0.82rem',
-                  cursor: isStreaming ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {runningModels.length === 0 ? (
-                  <option value={selectedModel}>{selectedModel}</option>
-                ) : (
-                  runningModels.map((modelName) => (
-                    <option key={modelName} value={modelName}>
-                      {modelName}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-            <span>Agent：尚未選擇</span>
-          </div>
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <strong>開始一段對話</strong>
-              <p>串接模型清單與對話 SSE API 後，即可在此輸入提示。</p>
-            </div>
-          ) : (
-            <div
-              className="chat-messages-container"
-              style={{
-                padding: '20px',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                minHeight: '300px',
-              }}
-            >
-              {messages.map((msg, idx) => {
-                const isUser = msg.role === 'user'
-                const thinkingContent = msg.content?.find((c) => c.type === 'thinking')?.text || ''
-                const textContent = msg.content?.find((c) => c.type === 'text')?.text || ''
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: isUser ? 'flex-end' : 'flex-start',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--muted-foreground)',
-                        marginBottom: '4px',
-                        paddingLeft: '4px',
-                        paddingRight: '4px',
-                      }}
-                    >
-                      {isUser ? username || 'You' : 'Assistant'}
-                    </div>
-                    <div
-                      style={{
-                        maxWidth: '80%',
-                        padding: '12px 16px',
-                        borderRadius: '10px',
-                        background: isUser ? 'var(--primary, #3b82f6)' : 'var(--portal-card-bg, #1e293b)',
-                        color: isUser ? '#fff' : 'inherit',
-                        border: isUser ? 'none' : '1px solid var(--portal-card-border, #334155)',
-                        wordBreak: 'break-word',
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {/* 思考過程區塊 (如果存在 thinking 內容) */}
-                      {thinkingContent && (
-                        <details
-                          open={!textContent}
-                          style={{
-                            marginBottom: textContent ? '10px' : '0',
-                            padding: '8px 12px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: '6px',
-                            borderLeft: '3px solid #8b5cf6',
-                            fontSize: '0.85rem',
-                          }}
-                        >
-                          <summary style={{ cursor: 'pointer', color: '#c084fc', fontWeight: 500 }}>
-                            💭 思考過程 {isStreaming && !textContent ? '（思考中…）' : ''}
-                          </summary>
-                          <div style={{ marginTop: '6px', whiteSpace: 'pre-wrap', color: 'var(--muted-foreground)' }}>
-                            {thinkingContent}
-                          </div>
-                        </details>
-                      )}
-
-                      {/* 正式文字內容 */}
-                      {textContent ? (
-                        <div style={{ whiteSpace: 'pre-wrap' }}>{textContent}</div>
-                      ) : (
-                        !thinkingContent && (
-                          <div style={{ color: 'var(--muted-foreground)' }}>
-                            {isStreaming && !isUser ? '思考中…' : '（無回覆內容）'}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <form className="chat-composer" onSubmit={handleSubmit}>
-            <input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={isStreaming ? '正在接收回覆中…' : '請輸入訊息…'}
-              disabled={isStreaming}
-            />
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={isStreaming || !inputText.trim()}
-            >
-              {isStreaming ? '生成中…' : '送出'}
-            </button>
-          </form>
-        </article>
-      </div>
-    </section>
-  )
+  return <section>
+    <header className="page-header"><p className="eyebrow">CHAT WORKSPACE</p>
+      <h1>對話工作台</h1><p>選擇模型與 Agent，查看執行進度及參考來源。</p></header>
+    {error && <p role="alert" style={{ color: '#dc2626' }}>{error}</p>}
+    <div className="chat-workspace">
+      <aside className="chat-panel"><strong>工作階段</strong>
+        <button type="button" className="secondary-button" disabled={streaming}
+          onClick={() => { setSessionId(null); setMessages([]); setError(''); setProgress('') }}>＋ 建立新對話</button>
+        {!sessions.length && <p>尚無對話紀錄</p>}
+        {sessions.map(session => <button key={session.conversationId} className="chat-session" type="button" disabled={streaming}
+          onClick={() => selectSession(session)} style={{ display: 'block', width: '100%', padding: 10, textAlign: 'left' }}>
+          <span>{session.title || '新對話'}</span><small>{sessionModelName(session)}</small>
+        </button>)}
+      </aside>
+      <article className="chat-main">
+        <div className="chat-config">
+          <label>模型：<select value={selectedModel} disabled={streaming || !!sessionId || !needsModel}
+            onChange={event => setSelectedModel(event.target.value)}>
+            {!models.length && <option value="">無可用模型</option>}
+            {models.map(model => <option key={modelKey(model)} value={modelKey(model)}>
+              {model.source === 'cloud' ? '雲端' : '本地'} · {model.name}</option>)}
+          </select></label>
+          <label>Agent：<select value={selectedAgent} disabled={streaming || !!sessionId}
+            onChange={event => setSelectedAgent(event.target.value)}>
+            <option value="">一般聊天</option>
+            {!!selectedAgent && !agent && <option value={selectedAgent} disabled>Agent 已移除</option>}
+            {agents.filter(item => item.capabilities.task_submission || item.id === selectedAgent).map(item =>
+              <option key={item.id} value={item.id} disabled={!item.enabled || !item.capabilities.task_submission}>
+                {item.name}{!item.enabled ? '（已停用）' : ''}</option>)}
+          </select></label>
+          {!needsModel && <small>模型由 Agent 實例設定</small>}
+          <button type="button" className="secondary-button" disabled={streaming} onClick={() => void refreshOptions()}>更新模型與 Agent</button>
+        </div>
+        {agentUnavailable && <p className="chat-status" role="status">此 Agent 已停用。請至 Agent 管理允許新任務，或建立新對話改選 Agent。</p>}
+        {modelUnavailable && <p className="chat-status" role="status">目前模型未啟用或已移除。請啟用模型或建立新對話改選模型。</p>}
+        {progress && <p className="chat-status" role="status">{progress}</p>}
+        <div className="chat-messages-container" style={{ padding: 20, minHeight: 300, overflowY: 'auto' }}>
+          {!messages.length && <p>輸入訊息開始對話。</p>}
+          {messages.map((message, index) => <div key={index} style={{ marginBottom: 20 }}>
+            <strong>{message.role === 'user' ? username || 'You' : 'Assistant'}</strong>
+            {message.content.filter(part => part.type === 'thinking').map((part, i) =>
+              <details key={i}><summary>思考過程</summary><p style={{ whiteSpace: 'pre-wrap' }}>{part.text}</p></details>)}
+            {message.content.filter(part => part.type === 'text').map((part, i) =>
+              <p key={i} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{part.text}</p>)}
+            {!!message.sources?.length && <details><summary>搜尋來源（{message.sources.length}）</summary>
+              <ol>{message.sources.filter(source => /^https?:\/\//i.test(source.url)).map(source =>
+                <li key={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title || source.url}</a></li>)}</ol>
+            </details>}
+            {message.status === 'cancelled' && <small>已取消，保留部分回答</small>}
+            {message.status === 'error' && <small>未完成，保留已接收內容</small>}
+          </div>)}
+        </div>
+        <form className="chat-composer" onSubmit={submit}>
+          <input value={input} onChange={event => setInput(event.target.value)} disabled={streaming} placeholder="請輸入訊息…" />
+          {streaming ? <button type="button" onClick={stop} disabled={cancelling}>{cancelling ? '取消中…' : '停止'}</button>
+            : <button type="submit" className="primary-button" disabled={!input.trim() || modelUnavailable || agentUnavailable}>送出</button>}
+        </form>
+      </article>
+    </div>
+  </section>
 }
-
